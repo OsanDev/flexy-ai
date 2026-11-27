@@ -69,6 +69,8 @@ def select_video_encoder(requested: str | None = None, capabilities: dict[str, A
 
 MAX_CLIPS = 80
 MAX_DURATION = 60 * 30
+MAX_RENDER_SECONDS = 60 * 60
+RENDER_POLL_INTERVAL = 0.25
 ALLOWED_WIDTHS = {720, 1080, 1280, 1440, 1920, 2560, 2160, 3840, 4320, 7680}
 ALLOWED_HEIGHTS = {720, 1080, 1280, 1440, 1920, 2560, 2160, 3840, 4320, 7680}
 EXPORT_PRESETS = {
@@ -571,21 +573,46 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
         "-movflags", "+faststart", "-stats_period", "1", "-progress", "pipe:1", "-nostats", str(output_path),
     ]
     try:
-        # FFmpeg emits machine-readable progress records on stdout. Keep stderr
-        # in a temporary file so a verbose encoder cannot fill a pipe and stall.
+        # Read progress on a daemon thread so the render controller can keep
+        # checking cancellation and the deadline even when FFmpeg emits no output.
+        import queue
+        import threading
+
         with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as error_log:
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=error_log,
                                        text=True, bufsize=1)
             started = time.monotonic()
+            lines: queue.Queue[str | None] = queue.Queue()
+
+            def read_progress() -> None:
+                try:
+                    assert process.stdout is not None
+                    for output_line in process.stdout:
+                        lines.put(output_line)
+                finally:
+                    lines.put(None)
+
+            reader = threading.Thread(target=read_progress, name="flexy-ffmpeg-progress", daemon=True)
+            reader.start()
             try:
-                assert process.stdout is not None
-                for line in process.stdout:
+                finished_reading = False
+                while not finished_reading:
                     if cancel_check and cancel_check():
                         raise RenderCancelledError("Render cancelled by user.")
-                    key, separator, value = line.strip().partition("=")
-                    if not separator:
+                    if time.monotonic() - started > MAX_RENDER_SECONDS:
+                        raise RuntimeError("FFmpeg render exceeded the 60-minute time limit.")
+                    try:
+                        line = lines.get(timeout=RENDER_POLL_INTERVAL)
+                    except queue.Empty:
+                        if process.poll() is not None:
+                            # The reader will enqueue its EOF sentinel shortly.
+                            continue
                         continue
-                    if key == "out_time_ms":
+                    if line is None:
+                        finished_reading = True
+                        continue
+                    key, separator, value = line.strip().partition("=")
+                    if separator and key == "out_time_ms":
                         try:
                             elapsed = int(value) / 1_000_000
                             percent = max(0, min(99, round(elapsed / duration * 100)))
@@ -593,13 +620,6 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
                                 progress_callback(percent)
                         except (ValueError, ZeroDivisionError):
                             pass
-                    if time.monotonic() - started > 60 * 60:
-                        process.terminate()
-                        try:
-                            process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                        raise RuntimeError("FFmpeg render exceeded the 60-minute time limit.")
                 return_code = process.wait(timeout=30)
             except Exception:
                 if process.poll() is None:
@@ -610,6 +630,9 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
                         process.kill()
                         process.wait()
                 raise
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
             error_log.seek(0)
             stderr_text = error_log.read()
         if return_code != 0:
