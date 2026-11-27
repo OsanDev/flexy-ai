@@ -199,8 +199,42 @@ class SubtitleExportRequest(BaseModel):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "FLEXY AI", "version": APP_VERSION,
-            "ffmpeg_available": __import__("shutil").which("ffmpeg") is not None}
+    """Readiness probe for the API, SQLite database, persistent storage and FFmpeg."""
+    database_available = False
+    storage_available = False
+    try:
+        storage.ensure_dirs()
+        storage_available = (
+            storage.DATA_DIR.is_dir()
+            and storage.MEDIA_DIR.is_dir()
+            and storage.RENDER_DIR.is_dir()
+        )
+        with storage.connect() as db:
+            db.execute("SELECT 1").fetchone()
+        database_available = True
+    except (OSError, RuntimeError):
+        pass
+    except Exception:
+        # Keep infrastructure details out of the public health response.
+        pass
+
+    ffmpeg_available = shutil.which("ffmpeg") is not None
+    ready = database_available and storage_available
+    payload = {
+        "status": "ok" if ready else "not_ready",
+        "app": "FLEXY AI",
+        "version": APP_VERSION,
+        "database_available": database_available,
+        "storage_available": storage_available,
+        "ffmpeg_available": ffmpeg_available,
+    }
+    if not ready:
+        return Response(
+            content=__import__("json").dumps(payload),
+            status_code=503,
+            media_type="application/json",
+        )
+    return payload
 
 @app.post("/api/projects")
 def put_project(request: ProjectRequest, user=Depends(current_user)):
