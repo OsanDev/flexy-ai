@@ -762,6 +762,13 @@ def run_render_job(job_id: str, graph: dict[str, Any]) -> None:
     output_path = storage.RENDER_DIR / output_name
     try:
         if not storage.start_job(job_id):
+            # A queued job can be cancelled before its background task gets CPU
+            # time. In that race start_job correctly refuses to overwrite the
+            # cancellation request, but the worker must still finalize the job.
+            job = storage.get_job(job_id)
+            if job and job.get("status") == "cancelling":
+                storage.update_job(job_id, status="cancelled", progress=0, output_name=None,
+                                   error="Render cancelled before processing started.")
             return
 
         def cancelled() -> bool:
