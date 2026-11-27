@@ -12,11 +12,14 @@ class MediaProbeError(ValueError):
     """Raised when an uploaded file cannot be inspected as media."""
 
 
+class MediaProbeUnavailable(RuntimeError):
+    """Raised when the server cannot validate uploads because ffprobe is missing."""
+
+
 def probe_media(path: Path) -> dict[str, Any]:
     executable = shutil.which("ffprobe")
     if not executable:
-        # Keep importing and previewing possible on hosts without FFmpeg tools.
-        return {"probe_available": False}
+        raise MediaProbeUnavailable("Media inspection is unavailable because FFprobe is not installed.")
     command = [
         executable, "-v", "error", "-show_entries",
         "format=duration,format_name:stream=codec_type,codec_name,width,height,avg_frame_rate,sample_rate,channels",
