@@ -40,7 +40,8 @@ def test_startup_removes_partial_outputs_for_interrupted_jobs(tmp_path, monkeypa
     storage.create_job("job-1", "p1")
     assert storage.start_job("job-1")
     (render_dir / "job-1.mp4").write_bytes(b"partial")
-    (render_dir / "job-1.captions.srt").write_text("partial")
+    (render_dir / "job-1.captions.ass").write_text("[Script Info]")
+    (render_dir / "job-1.captions.srt").write_text("legacy partial")
 
     import asyncio
 
@@ -52,4 +53,5 @@ def test_startup_removes_partial_outputs_for_interrupted_jobs(tmp_path, monkeypa
 
     assert storage.get_job("job-1")["status"] == "interrupted"
     assert not (render_dir / "job-1.mp4").exists()
+    assert not (render_dir / "job-1.captions.ass").exists()
     assert not (render_dir / "job-1.captions.srt").exists()
