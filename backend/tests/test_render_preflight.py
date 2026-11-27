@@ -15,6 +15,9 @@ def setup_project(monkeypatch, tmp_path, duration=5.0, owner="project-a"):
     }
     monkeypatch.setattr(storage, "get_media", lambda media_id: media if media_id == "video-1" else None)
     monkeypatch.setattr(storage, "MEDIA_DIR", tmp_path)
+    monkeypatch.setattr("app.render_preflight.probe_video_encoders", lambda: {
+        "ffmpeg_available": True, "available": ["libx264"], "hardware": [], "error": None,
+    })
     (tmp_path / "clip.mp4").write_bytes(b"fixture")
 
 
@@ -94,3 +97,15 @@ def test_render_endpoint_rejects_foreign_project_media(monkeypatch, tmp_path):
         main.create_render("project-a", RenderRequest(graph=graph), BackgroundTasks(), user=type("User", (), {"id": "test-owner"})())
     assert error.value.status_code == 422
     assert "belong to this project" in error.value.detail
+
+
+
+def test_preflight_blocks_when_ffmpeg_is_unavailable(monkeypatch, tmp_path):
+    setup_project(monkeypatch, tmp_path)
+    monkeypatch.setattr("app.render_preflight.probe_video_encoders", lambda: {
+        "ffmpeg_available": False, "available": [], "hardware": [], "error": "missing",
+    })
+    graph = {"clips": [{"media_id": "video-1", "duration": 2}]}
+    report = inspect_render("project-a", graph)
+    assert report["ready"] is False
+    assert "FFmpeg is not available" in report["message"]
