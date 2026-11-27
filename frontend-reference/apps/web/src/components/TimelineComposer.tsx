@@ -1197,6 +1197,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
           </div>
           {audioIntelligence.profiles.map((profile) => {
             const asset = assets.find((item) => item.id === profile.mediaId);
+            const qualityReport = audioQualityReports[profile.mediaId];
             return <div className="audio-profile" key={profile.clipId}>
               <strong>{asset?.filename ?? "Audio clip"}</strong>
               <div className="audio-profile-wave" aria-label={`${profile.bucketCount} waveform peak samples`}>
@@ -1209,10 +1210,10 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
                   {audioQualityBusy[profile.mediaId] ? "Measuring…" : audioQualityReports[profile.mediaId] ? "Refresh LUFS" : "Measure LUFS"}
                 </button>
                 {audioQualityErrors[profile.mediaId] && <small role="alert">{audioQualityErrors[profile.mediaId]}</small>}
-                {audioQualityReports[profile.mediaId] && <small>
-                  EBU R128 · Integrated {audioQualityReports[profile.mediaId].integrated_lufs === null ? "Unavailable" : `${audioQualityReports[profile.mediaId].integrated_lufs.toFixed(1)} LUFS`} ·
-                  LRA {audioQualityReports[profile.mediaId].loudness_range_lu === null ? "Unavailable" : `${audioQualityReports[profile.mediaId].loudness_range_lu.toFixed(1)} LU`} ·
-                  True peak {audioQualityReports[profile.mediaId].true_peak_dbfs === null ? "Unavailable" : `${audioQualityReports[profile.mediaId].true_peak_dbfs.toFixed(1)} dBFS`}
+                {qualityReport && <small>
+                  EBU R128 · Integrated {qualityReport.integrated_lufs == null ? "Unavailable" : `${qualityReport.integrated_lufs.toFixed(1)} LUFS`} ·
+                  LRA {qualityReport.loudness_range_lu == null ? "Unavailable" : `${qualityReport.loudness_range_lu.toFixed(1)} LU`} ·
+                  True peak {qualityReport.true_peak_dbfs == null ? "Unavailable" : `${qualityReport.true_peak_dbfs.toFixed(1)} dBFS`}
                 </small>}
               </div>
             </div>;
