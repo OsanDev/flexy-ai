@@ -354,3 +354,72 @@ class RenderProgressTests(unittest.TestCase):
         finally:
             (media_dir / "clip.mp4").unlink(missing_ok=True)
             media_dir.rmdir()
+
+
+class RenderProcessControlTests(unittest.TestCase):
+    def _graph(self):
+        return {
+            "clips": [{"path": "/tmp/source.mp4", "source_start": 0, "duration": 2,
+                       "timeline_start": 0, "track_index": 0, "transition": "none"}],
+            "audio_clips": [], "captions": [], "video_duration": 2,
+            "width": 1280, "height": 720, "frame_rate": 30, "video_bitrate": "5M",
+        }
+
+    def test_cancellation_is_checked_even_when_ffmpeg_emits_no_progress(self):
+        import io
+        from app.rendering import render_mp4, RenderCancelledError
+
+        class SilentProcess:
+            instance = None
+            def __init__(self, *_args, **_kwargs):
+                self.stdout = io.StringIO("")
+                self.returncode = None
+                self.terminated = False
+                SilentProcess.instance = self
+            def poll(self):
+                return self.returncode
+            def terminate(self):
+                self.terminated = True
+                self.returncode = -15
+            def wait(self, timeout=None):
+                return self.returncode
+            def kill(self):
+                self.returncode = -9
+
+        output = Path("/tmp/flexy-silent-cancel.mp4")
+        with patch("app.rendering.shutil.which", return_value="/usr/bin/ffmpeg"), \\
+             patch("app.rendering.subprocess.Popen", SilentProcess):
+            with self.assertRaises(RenderCancelledError):
+                render_mp4(self._graph(), output, cancel_check=lambda: True)
+        self.assertTrue(SilentProcess.instance.terminated)
+        output.unlink(missing_ok=True)
+
+    def test_timeout_is_checked_even_when_ffmpeg_emits_no_progress(self):
+        import io
+        from app.rendering import render_mp4, MAX_RENDER_SECONDS
+
+        class SilentProcess:
+            instance = None
+            def __init__(self, *_args, **_kwargs):
+                self.stdout = io.StringIO("")
+                self.returncode = None
+                self.terminated = False
+                SilentProcess.instance = self
+            def poll(self):
+                return self.returncode
+            def terminate(self):
+                self.terminated = True
+                self.returncode = -15
+            def wait(self, timeout=None):
+                return self.returncode
+            def kill(self):
+                self.returncode = -9
+
+        output = Path("/tmp/flexy-silent-timeout.mp4")
+        with patch("app.rendering.shutil.which", return_value="/usr/bin/ffmpeg"), \\
+             patch("app.rendering.subprocess.Popen", SilentProcess), \\
+             patch("app.rendering.MAX_RENDER_SECONDS", -1):
+            with self.assertRaisesRegex(RuntimeError, "60-minute time limit"):
+                render_mp4(self._graph(), output)
+        self.assertTrue(SilentProcess.instance.terminated)
+        output.unlink(missing_ok=True)
