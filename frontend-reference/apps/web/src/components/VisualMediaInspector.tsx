@@ -117,10 +117,11 @@ export function VisualMediaInspector({ assets, projectId, onCreateEditPlan, onAd
     try {
       const detected = await mediaApi.detectScenes(projectId, asset.id, 50, true);
       const duration = Math.max(0.2, asset.duration ?? 0.2);
+      const sampleCount = Math.min(6, Math.max(1, Math.ceil(duration / 5)));
       const rawCandidates = detected.scenes.length
         ? [0, ...detected.scenes.map((scene) => scene.start)]
-        : Array.from({ length: Math.min(6, Math.max(1, Math.ceil(duration / 5))) }, (_, index, all) =>
-            all.length === 1 ? 0 : (index * (duration - 0.1)) / (all.length - 1));
+        : Array.from({ length: sampleCount }, (_, index) =>
+            sampleCount === 1 ? 0 : (index * (duration - 0.1)) / (sampleCount - 1));
       const candidates = rawCandidates
         .filter((time, index, all) => time >= 0 && time < duration && all.findIndex((value) => Math.abs(value - time) < 0.75) === index)
         .sort((a, b) => a - b);
