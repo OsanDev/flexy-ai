@@ -50,6 +50,8 @@ async def lifespan(_app: FastAPI):
         # Caption sidecars are generated as ASS files by render_mp4.
         # Remove that exact temporary artifact after an interrupted render.
         storage.safe_storage_path(storage.RENDER_DIR, f"{job['id']}.captions.ass").unlink(missing_ok=True)
+        # Remove the legacy SRT sidecar name as well for older interrupted jobs.
+        storage.safe_storage_path(storage.RENDER_DIR, f"{job['id']}.captions.srt").unlink(missing_ok=True)
     yield
 
 
