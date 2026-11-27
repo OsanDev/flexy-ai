@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+DATA_DIR = Path(os.environ.get("FLEXY_DATA_DIR", str(Path(__file__).resolve().parents[2] / "data"))).expanduser().resolve()
 DB_PATH = DATA_DIR / "flexy.sqlite3"
 MEDIA_DIR = DATA_DIR / "media"
 RENDER_DIR = DATA_DIR / "renders"
