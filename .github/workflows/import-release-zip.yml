@@ -2,8 +2,7 @@ name: Import FLEXY AI release archive
 
 on:
   push:
-    paths:
-      - "FLEXY-AI-v4.6.0-local-run-release-candidate.zip"
+    branches: [main]
   workflow_dispatch:
 
 permissions:
