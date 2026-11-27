@@ -113,6 +113,12 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
   const [showMusicTransitionSuggestions, setShowMusicTransitionSuggestions] = useState(false);
 
   const selectedVideo = selectedClip?.type === "video" ? doc.videoClips.find((x) => x.id === selectedClip.id) : undefined;
+  const selectedVideoOrder = selectedVideo ? [...doc.videoClips].sort((x, y) => x.timelineStart - y.timelineStart) : [];
+  const selectedVideoIndex = selectedVideo ? selectedVideoOrder.findIndex((x) => x.id === selectedVideo.id) : -1;
+  const previousShot = selectedVideoIndex > 0 ? selectedVideoOrder[selectedVideoIndex - 1] : undefined;
+  const nextShot = selectedVideoIndex >= 0 && selectedVideoIndex < selectedVideoOrder.length - 1 ? selectedVideoOrder[selectedVideoIndex + 1] : undefined;
+  const selectedVideoAsset = selectedVideo ? assets.find((item) => item.id === selectedVideo.mediaId) : undefined;
+  const remainingSource = selectedVideoAsset?.duration == null || !selectedVideo ? null : Math.max(0, selectedVideoAsset.duration - selectedVideo.sourceStart);
   const selectedAudio = selectedClip?.type === "audio" ? doc.audioClips.find((x) => x.id === selectedClip.id) : undefined;
   const selectedCaption = selectedClip?.type === "caption" ? doc.captions.find((x) => x.id === selectedClip.id) : undefined;
   const patchSelected = (patch: Record<string, unknown>) => {
@@ -1614,14 +1620,14 @@ function Track({ label, color, items, viewDuration, beatMarkers = [], snapEnable
   onSnapGuide: (time:number | null) => void;
   locked?: boolean; muted?: boolean; hidden?: boolean; solo?: boolean; trackKey: string; accent?: string; onRename: (name: string) => void; onAccentChange: (color: string) => void; onToggleLock: () => void; onToggleMute?: () => void; onToggleVisibility: () => void; onToggleSolo?: () => void;
   items: Array<{
-    id:string; title:string; start:number; duration:number;
+    id:string; title:string; start:number; duration:number; selected?: boolean; onSelect: () => void;
     change:(start:number,sourceStart:number,duration:number)=>void;
     split:()=>void; remove:()=>void;
   }>;
 }) {
   const [drag, setDrag] = useState<{id:string; mode:"move"|"left"|"right"; x:number; start:number; duration:number} | null>(null);
   const pixelsPerSecond = 100 / Math.max(1, viewDuration);
-  const begin = (event: React.PointerEvent<HTMLDivElement>, item: typeof items[number], mode:"move"|"left"|"right") => {
+  const begin = (event: React.PointerEvent<HTMLElement>, item: typeof items[number], mode:"move"|"left"|"right") => {
     event.preventDefault();
     event.stopPropagation();
     if (locked) return;
