@@ -50,6 +50,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          # The connected GitHub App lacks the special Workflows permission.
+          # Keep workflow files out of this import commit; preserve the importer already on main.
+          git reset -q -- .github/workflows
           if git diff --cached --quiet; then
             echo "No source changes to commit."
           else
