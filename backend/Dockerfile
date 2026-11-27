@@ -12,8 +12,8 @@ WORKDIR /app
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
-RUN mkdir -p /app/data && useradd --create-home --uid 10001 flexy \
-    && chown -R flexy:flexy /app
+RUN mkdir -p /app/data /data && useradd --create-home --uid 10001 flexy \
+    && chown -R flexy:flexy /app /data
 USER flexy
 
 EXPOSE 8000
