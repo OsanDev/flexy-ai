@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.media_probe import MediaProbeError, probe_media
+from app.media_probe import MediaProbeError, MediaProbeUnavailable, probe_media
 
 
 def test_probe_returns_stream_metadata(tmp_path: Path):
@@ -36,9 +36,10 @@ def test_probe_rejects_unreadable_media(tmp_path: Path):
             probe_media(media)
 
 
-def test_probe_gracefully_reports_missing_ffprobe(tmp_path: Path):
+def test_probe_fails_closed_when_ffprobe_is_missing(tmp_path: Path):
     with patch("app.media_probe.shutil.which", return_value=None):
-        assert probe_media(tmp_path / "sample") == {"probe_available": False}
+        with pytest.raises(MediaProbeUnavailable):
+            probe_media(tmp_path / "sample")
 
 
 def test_storage_persists_probe_metadata(tmp_path: Path):
