@@ -1,0 +1,58 @@
+name: Import FLEXY AI release archive
+
+on:
+  push:
+    paths:
+      - "FLEXY-AI-v4.6.0-local-run-release-candidate.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Extract and install project source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="FLEXY-AI-v4.6.0-local-run-release-candidate.zip"
+          test -f "$ARCHIVE"
+          mkdir -p /tmp/flexy-unpack
+          unzip -q "$ARCHIVE" -d /tmp/flexy-unpack
+
+          PROJECT_ROOT="$(find /tmp/flexy-unpack -type f -name README.md -printf '%h\n' | while read -r d; do
+            if [ -d "$d/backend" ] && [ -d "$d/frontend-reference" ] && [ -f "$d/docker-compose.yml" ]; then
+              printf '%s\n' "$d"
+              break
+            fi
+          done)"
+
+          test -n "$PROJECT_ROOT"
+          echo "Importing source from: $PROJECT_ROOT"
+          cp -a "$PROJECT_ROOT"/. .
+          rm -f "$ARCHIVE"
+
+          test -d backend
+          test -d frontend-reference
+          test -f docker-compose.yml
+          echo "Imported file count:"
+          find . -type f -not -path './.git/*' | wc -l
+
+      - name: Commit imported source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+          else
+            git commit -m "Import FLEXY AI v4.6.0 release source"
+            git push origin HEAD:main
+          fi
