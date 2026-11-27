@@ -24,11 +24,15 @@ function cookieValue(name: string): string | null {
 // Persist a recovery copy immediately when the editor emits a document change.
 // The debounced cloud autosave remains authoritative, but this closes the small
 // window between a React render/effect and a user closing or refreshing the tab.
-function writeLocalRecoverySnapshot(projectId: string, document: TimelineDocument): boolean {
+function recoveryStorageKey(accountId: string, projectId: string): string {
+  return `flexy:recovery:${accountId}:${projectId}`;
+}
+
+function writeLocalRecoverySnapshot(accountId: string, projectId: string, document: TimelineDocument): boolean {
   const id = projectId.trim();
-  if (!id || typeof window === "undefined") return false;
+  if (!accountId || !id || typeof window === "undefined") return false;
   try {
-    localStorage.setItem(`flexy:recovery:${id}`, JSON.stringify({ document, updatedAt: Date.now() }));
+    localStorage.setItem(recoveryStorageKey(accountId, id), JSON.stringify({ document, updatedAt: Date.now() }));
     return true;
   } catch {
     // Storage can be unavailable or full. Cloud autosave still runs independently.
@@ -56,6 +60,7 @@ export default function App() {
   const [authUnavailable, setAuthUnavailable] = useState(false);
   const [authRetry, setAuthRetry] = useState(0);
   const [account, setAccount] = useState("");
+  const [accountId, setAccountId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [graphText, setGraphText] = useState(JSON.stringify(DEFAULT_GRAPH, null, 2));
   const [timelineGraph, setTimelineGraph] = useState<Record<string, unknown>>(DEFAULT_GRAPH);
@@ -101,6 +106,7 @@ export default function App() {
         if (cancelled) return;
         if (session?.email) {
           setAccount(session.email);
+          setAccountId(session.id);
           setSignedIn(true);
         }
       })
@@ -127,6 +133,7 @@ export default function App() {
       if (!response.ok) throw new Error(`Sign out failed (${response.status}).`);
       setSignedIn(false);
       setAccount("");
+      setAccountId("");
       setProjectLoaded(false);
       setLoadedProjectId("");
       setProjectDocument(undefined);
@@ -142,6 +149,7 @@ export default function App() {
     try {
       const result = await authRequest(mode, email, password);
       setAccount(result.email);
+      setAccountId(result.id);
       setSignedIn(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not authenticate.");
@@ -181,7 +189,7 @@ export default function App() {
         projectDocumentRef.current = restored;
         setProjectTitleDraft(cloud.name);
         try {
-          const local = localStorage.getItem(`flexy:recovery:${id}`);
+          const local = localStorage.getItem(recoveryStorageKey(accountId, id));
           if (local && restored) {
             const parsed = JSON.parse(local) as { document?: TimelineDocument; updatedAt?: number };
             if (parsed.document && Array.isArray(parsed.document.videoClips)
@@ -202,20 +210,20 @@ export default function App() {
       }
     })();
     return () => { cancelled = true; };
-  }, [projectId, signedIn]);
+  }, [projectId, signedIn, accountId]);
 
   useEffect(() => {
     if (!projectLoaded || loadedProjectId !== projectId.trim() || !projectId.trim() || !projectDocument || !projectDirty) return;
     try {
-      localStorage.setItem(`flexy:recovery:${projectId.trim()}`, JSON.stringify({
+      localStorage.setItem(recoveryStorageKey(accountId, projectId.trim()), JSON.stringify({
         document: projectDocument, updatedAt: Date.now()
       }));
     } catch { /* Cloud autosave remains the primary persistence path. */ }
-  }, [projectLoaded, loadedProjectId, projectId, projectDocument, projectDirty]);
+  }, [projectLoaded, loadedProjectId, projectId, projectDocument, projectDirty, accountId]);
 
   const restoreLocalRecovery = () => {
     try {
-      const raw = localStorage.getItem(`flexy:recovery:${projectId.trim()}`);
+      const raw = localStorage.getItem(recoveryStorageKey(accountId, projectId.trim()));
       const parsed = raw ? JSON.parse(raw) as {document?: TimelineDocument} : null;
       if (!parsed?.document) return;
       projectDocumentRef.current = parsed.document;
@@ -231,7 +239,7 @@ export default function App() {
   };
 
   const discardLocalRecovery = () => {
-    try { localStorage.removeItem(`flexy:recovery:${projectId.trim()}`); } catch {}
+    try { localStorage.removeItem(recoveryStorageKey(accountId, projectId.trim())); } catch {}
     setRecoveryAvailable(false);
   };
 
@@ -280,7 +288,7 @@ export default function App() {
           setProjectDirty(false);
           setSaveError("");
           setSaveStatus("All changes saved");
-          try { localStorage.removeItem(`flexy:recovery:${targetProjectId}`); } catch {}
+          try { localStorage.removeItem(recoveryStorageKey(accountId, targetProjectId)); } catch {}
         }
       }).catch((cause) => {
         if (projectSessionRef.current !== sessionId || loadedProjectId !== targetProjectId || projectId.trim() !== targetProjectId) return;
