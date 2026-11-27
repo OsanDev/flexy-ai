@@ -47,7 +47,9 @@ async def lifespan(_app: FastAPI):
     # Never expose partial MP4s from jobs that did not survive a restart.
     for job in interrupted:
         storage.safe_storage_path(storage.RENDER_DIR, f"{job['id']}.mp4").unlink(missing_ok=True)
-        storage.safe_storage_path(storage.RENDER_DIR, f"{job['id']}.captions.srt").unlink(missing_ok=True)
+        # Caption sidecars are generated as ASS files by render_mp4.
+        # Remove that exact temporary artifact after an interrupted render.
+        storage.safe_storage_path(storage.RENDER_DIR, f"{job['id']}.captions.ass").unlink(missing_ok=True)
     yield
 
 
