@@ -597,8 +597,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
           const level = difference >= 22 ? "high" : difference >= 10 ? "moderate" : "low";
           findings.push(`${previousAsset.filename} → ${currentAsset.filename}: ${level} visual difference (${difference}/100)`);
           if (current.transition === "none" && difference >= 22) {
-            current.transition = "crossfade";
-            changes.push(`Suggest crossfade between ${previousAsset.filename} and ${currentAsset.filename}`);
+            current.transition = "crossfade";            changes.push(`Suggest crossfade between ${previousAsset.filename} and ${currentAsset.filename}`);
           } else if (current.transition === "none" && difference >= 10) {
             current.transition = "fade";
             changes.push(`Suggest fade between ${previousAsset.filename} and ${currentAsset.filename}`);
@@ -707,7 +706,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
       sourceStart: Number(audio.sourceStart), duration: Number(audio.duration),
       timelineStart: Number(audio.timelineStart), trackIndex: Number(audio.trackIndex), volume: Number(audio.volume),
       fadeIn: Number(audio.fadeIn), fadeOut: Number(audio.fadeOut), role: audio.role,
-      bus: audio.role === "other" ? "effects" : audio.role,
+      bus: (audio.role === "other" ? "effects" : audio.role) as "dialogue" | "music" | "effects",
     };
     update({ ...doc, audioClips: [...doc.audioClips, clip] });
   };
@@ -1197,8 +1196,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
           </div>
           {audioIntelligence.profiles.map((profile) => {
             const asset = assets.find((item) => item.id === profile.mediaId);
-            const qualityReport = audioQualityReports[profile.mediaId];
-            return <div className="audio-profile" key={profile.clipId}>
+            const qualityReport = audioQualityReports[profile.mediaId];            return <div className="audio-profile" key={profile.clipId}>
               <strong>{asset?.filename ?? "Audio clip"}</strong>
               <div className="audio-profile-wave" aria-label={`${profile.bucketCount} waveform peak samples`}>
                 {(audioWaveforms[profile.mediaId]?.points ?? audioWaveforms[profile.mediaId]?.samples ?? audioWaveforms[profile.mediaId]?.waveform ?? []).slice(0, 96).map((value, index) =>
@@ -1585,7 +1583,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
               start:x.timelineStart,duration:x.duration,
               change:(start:number, source:number, len:number) => editVideo(x.id,start,source,len),
               split:() => splitVideo(x.id,playhead),remove:() => remove(x.id,"video"),
-            }))} snapEnabled={snapEnabled} snapPoints={snapPoints} onSnapGuide={setSnapGuide} />
+            }))} snapEnabled={snapEnabled} snapPoints={snapPoints} snapGuide={snapGuide} onSnapGuide={setSnapGuide} />
         ))}
         {Array.from({ length: Math.max(1, ...doc.audioClips.map((x) => x.trackIndex + 1)) }, (_, index) => (
           <Track key={`audio-${index}`} label={trackNames[`audio-${index}`] || `AUDIO ${index + 1}`} trackKey={`audio-${index}`} accent={trackColors[`audio-${index}`] || "mint"} onRename={(name) => updateTrackMeta(`audio-${index}`, { name })} onAccentChange={(color) => updateTrackMeta(`audio-${index}`, { color })} color="audio" locked={!!lockedTracks[`audio-${index}`]} hidden={hiddenAudioTracks.includes(index)} solo={doc.soloAudioTrack === index} onToggleVisibility={() => toggleTrackVisibility("audio", index)} onToggleSolo={() => toggleAudioTrackSolo(index)} onToggleLock={() => toggleTrackLock(`audio-${index}`)} onToggleMute={() => toggleAudioTrackMute(index)} viewDuration={Math.max(10, duration) / zoom} beatMarkers={beatTimelineMarkers}
@@ -1594,14 +1592,14 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
               start:x.timelineStart,duration:x.duration,
               change:(start:number, source:number, len:number) => editAudio(x.id,start,source,len),
               split:() => splitAudio(x.id,playhead),remove:() => remove(x.id,"audio"),
-            }))} snapEnabled={snapEnabled} snapPoints={snapPoints} onSnapGuide={setSnapGuide} />
+            }))} snapEnabled={snapEnabled} snapPoints={snapPoints} snapGuide={snapGuide} onSnapGuide={setSnapGuide} />
         ))}
         <Track label={trackNames["captions"] || "CAPTIONS"} trackKey="captions" accent={trackColors["captions"] || "amber"} onRename={(name) => updateTrackMeta("captions", { name })} onAccentChange={(color) => updateTrackMeta("captions", { color })} color="caption" locked={!!lockedTracks["captions"]} hidden={captionsHidden} onToggleVisibility={() => toggleTrackVisibility("captions") } onToggleLock={() => toggleTrackLock("captions")} viewDuration={Math.max(10, duration) / zoom} beatMarkers={beatTimelineMarkers}
           items={doc.captions.map((x) => ({
             id:x.id,title:x.text,selected:selectedClip?.id === x.id && selectedClip.type === "caption",onSelect:() => setSelectedClip({id:x.id,type:"caption"}),start:x.start,duration:x.duration,
             change:(start:number, _source:number, len:number) => editCaption(x.id,start,len),
             split:() => splitCaption(x.id,playhead),remove:() => remove(x.id,"caption"),
-          }))} snapEnabled={snapEnabled} snapPoints={snapPoints} onSnapGuide={setSnapGuide} />
+          }))} snapEnabled={snapEnabled} snapPoints={snapPoints} snapGuide={snapGuide} onSnapGuide={setSnapGuide} />
         {snapGuide !== null && <div className="snap-guide-readout">Snap guide · {snapGuide.toFixed(2)}s</div>}
       </div>
       {errors.length > 0 && <ul className="timeline-errors">{errors.map((error) => <li key={error}>{error}</li>)}</ul>}
@@ -1611,13 +1609,14 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
 }
 
 
-function Track({ label, color, items, viewDuration, beatMarkers = [], snapEnabled, snapPoints, onSnapGuide, locked = false, muted = false, onToggleLock, onToggleMute, hidden = false, solo = false, onToggleVisibility, onToggleSolo, trackKey, accent = "violet", onRename, onAccentChange }: {
+function Track({ label, color, items, viewDuration, beatMarkers = [], snapEnabled, snapPoints, snapGuide, onSnapGuide, locked = false, muted = false, onToggleLock, onToggleMute, hidden = false, solo = false, onToggleVisibility, onToggleSolo, trackKey, accent = "violet", onRename, onAccentChange }: {
   label: string;
   color: string;
   viewDuration: number;
   beatMarkers?: number[];
   snapEnabled: boolean;
   snapPoints: number[];
+  snapGuide: number | null;
   onSnapGuide: (time:number | null) => void;
   locked?: boolean; muted?: boolean; hidden?: boolean; solo?: boolean; trackKey: string; accent?: string; onRename: (name: string) => void; onAccentChange: (color: string) => void; onToggleLock: () => void; onToggleMute?: () => void; onToggleVisibility: () => void; onToggleSolo?: () => void;
   items: Array<{
