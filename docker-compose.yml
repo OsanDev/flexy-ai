@@ -1,0 +1,39 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      FLEXY_CORS_ORIGINS: "http://localhost:8080,http://127.0.0.1:8080"
+      FLEXY_COOKIE_SECURE: "false"
+      FLEXY_AI_API_KEY: "${FLEXY_AI_API_KEY:-}"
+      FLEXY_AI_BASE_URL: "${FLEXY_AI_BASE_URL:-https://api.openai.com/v1}"
+      FLEXY_AI_MODEL: "${FLEXY_AI_MODEL:-gpt-4o-mini}"
+      FLEXY_VISION_MODEL: "${FLEXY_VISION_MODEL:-}"
+      FLEXY_SPEECH_MODEL: "${FLEXY_SPEECH_MODEL:-whisper-1}"
+      FLEXY_SPEECH_DIARIZATION_MODEL: "${FLEXY_SPEECH_DIARIZATION_MODEL:-}"
+    volumes:
+      - flexy_data:/app/data
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend-reference/apps/web
+      args:
+        VITE_API_BASE_URL: ""
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  flexy_data:

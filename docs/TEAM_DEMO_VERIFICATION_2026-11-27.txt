@@ -1,0 +1,20 @@
+FLEXY AI 4.3.5 DEVELOPMENT — TEAM DEMO VERIFICATION
+Date: 2026-11-27
+
+PASS
+- Python compileall: backend/app
+- Backend pytest: 527 passed
+- Frontend standalone timeline checks: passed
+- FFmpeg and FFprobe binaries: present (/usr/bin)
+
+BLOCKED / NOT VERIFIED
+- Frontend npm packages: 8 missing (react, react-dom, @types/react, @types/react-dom, @vitejs/plugin-react, typescript, vite, @playwright/test)
+- npm registry DNS: EAI_AGAIN registry.npmjs.org
+- React TypeScript check: not run successfully (dependencies absent)
+- Vite production build: not run successfully (dependencies absent)
+- Live authenticated browser upload-to-export: not verified
+- Android APK/AAB and physical device tests: not complete
+- Production security/deployment review: not complete
+
+Interpretation
+Backend and standalone timeline checks passing do not certify the full product. This package is for an internal team walkthrough only, not a release candidate.

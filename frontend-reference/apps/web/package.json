@@ -1,0 +1,27 @@
+{
+  "name": "flexy-ai-web",
+  "private": true,
+  "version": "4.6.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test:timeline": "node scripts/test-timeline-core.mjs",
+    "test:e2e": "playwright test",
+    "doctor": "node scripts/check-environment.mjs"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "@vitejs/plugin-react": "4.3.4",
+    "typescript": "5.7.3",
+    "vite": "5.4.14",
+    "@playwright/test": "1.56.1"
+  }
+}

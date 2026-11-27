@@ -1,0 +1,25 @@
+FLEXY AI 4.6.0
+Integrated local-run release candidate
+
+Verified in the build workspace:
+- Backend pytest: 556 passed
+- Backend Python compilation: passed
+- Timeline-core compile and tests: passed
+- FFmpeg and FFprobe detected
+- Bash launcher syntax: passed
+- Docker Compose YAML parsed successfully
+- Source archive integrity: checked after packaging
+
+Not verified in this workspace:
+- React-aware TypeScript check and Vite production build (npm registry timed out; dependencies unavailable)
+- Playwright browser workflow
+- Docker image build / Compose runtime
+- Live AI provider calls (no provider key supplied)
+- Public deployment, HTTPS, production security review, or load testing
+
+Use:
+- macOS/Linux: ./start-local.sh
+- Windows PowerShell: .\start-local.ps1
+- Docker: docker compose up --build (open http://localhost:8080)
+
+This package is intended for local setup and team evaluation, not public production deployment.
