@@ -19,7 +19,7 @@ from . import storage
 from .auth_api import router as auth_router, current_user, _csrf_check
 from .ai_director import build_edit_plan
 from .rendering import RenderCancelledError, RenderValidationError, render_mp4, validate_render_graph
-from .media_probe import MediaProbeError, probe_media
+from .media_probe import MediaProbeError, MediaProbeUnavailable, probe_media
 from .media_previews import MediaPreviewError, audio_waveform
 from .scene_detection import SceneDetectionError, detect_scenes, extract_scene_thumbnail
 from .visual_analysis import describe_frame, representative_scene_timestamp
@@ -460,6 +460,9 @@ async def upload_media(project_id: str, file: UploadFile = File(...), user=Depen
         await file.close()
     try:
         metadata = probe_media(destination)
+    except MediaProbeUnavailable as exc:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(503, str(exc)) from exc
     except MediaProbeError as exc:
         destination.unlink(missing_ok=True)
         raise HTTPException(415, str(exc)) from exc
