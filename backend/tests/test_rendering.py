@@ -417,7 +417,7 @@ class RenderProcessControlTests(unittest.TestCase):
 
         output = Path("/tmp/flexy-silent-timeout.mp4")
         with patch("app.rendering.shutil.which", return_value="/usr/bin/ffmpeg"), \
-             patch("app.rendering.subprocess.Popen", SilentProcess), \\
+             patch("app.rendering.subprocess.Popen", SilentProcess), \
              patch("app.rendering.MAX_RENDER_SECONDS", -1):
             with self.assertRaisesRegex(RuntimeError, "60-minute time limit"):
                 render_mp4(self._graph(), output)
