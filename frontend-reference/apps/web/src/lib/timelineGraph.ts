@@ -13,6 +13,7 @@ export type VideoTimelineClip = {
   chromaKeyColor?: string;
   chromaKeySimilarity?: number;
   chromaKeyBlend?: number;
+  positionKeyframes?: Array<{ time: number; x: number; y: number; confidence?: number }>;
 };
 
 export type AudioTimelineClip = {
@@ -105,6 +106,7 @@ export function buildRenderGraph(document: TimelineDocument): Record<string, unk
         chroma_key_color: clip.chromaKeyColor ?? null,
         chroma_key_similarity: clip.chromaKeySimilarity ?? 0.3,
         chroma_key_blend: clip.chromaKeyBlend ?? 0.1,
+        position_keyframes: clip.positionKeyframes ?? [],
       })),
     audio_clips: [...document.audioClips]
       .filter((clip) => !(document.hiddenAudioTracks ?? []).includes(clip.trackIndex))
@@ -181,6 +183,17 @@ export function validateTimelineDocument(document: TimelineDocument): string[] {
     if (clip.chromaKeyColor !== undefined && !/^#[0-9a-fA-F]{6}$/.test(clip.chromaKeyColor)) errors.push(`Video clip ${clip.id} chroma key color must be a six-digit hex color.`);
     if (clip.chromaKeySimilarity !== undefined && (!Number.isFinite(clip.chromaKeySimilarity) || clip.chromaKeySimilarity < 0 || clip.chromaKeySimilarity > 1)) errors.push(`Video clip ${clip.id} chroma key similarity must be between 0 and 1.`);
     if (clip.chromaKeyBlend !== undefined && (!Number.isFinite(clip.chromaKeyBlend) || clip.chromaKeyBlend < 0 || clip.chromaKeyBlend > 1)) errors.push(`Video clip ${clip.id} chroma key blend must be between 0 and 1.`);
+    let previousTrackingTime = -1;
+    for (const point of clip.positionKeyframes ?? []) {
+      if (!Number.isFinite(point.time) || point.time < 0 || point.time > clip.duration ||
+          !Number.isFinite(point.x) || point.x < 0 || point.x > 1 ||
+          !Number.isFinite(point.y) || point.y < 0 || point.y > 1 ||
+          point.time <= previousTrackingTime) {
+        errors.push(`Video clip ${clip.id} has invalid motion tracking keyframes.`);
+        break;
+      }
+      previousTrackingTime = point.time;
+    }
   }
   for (const clip of document.audioClips) {
     if (!clip.mediaId.trim()) errors.push(`Audio clip ${clip.id} needs a media ID.`);
