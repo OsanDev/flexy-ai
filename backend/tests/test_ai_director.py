@@ -108,10 +108,25 @@ class AIDirectorTests(unittest.TestCase):
     @patch.dict(os.environ, {'FLEXY_AI_API_KEY':'test-key','FLEXY_AI_MODEL':'test-model'})
     @patch('app.ai_director.urllib.request.urlopen', return_value=FakeResponse())
     def test_configured_model_provider_returns_structured_plan(self, mocked):
-        plan=build_edit_plan('Make a reel',[],{'id':'p'},'A short transcript')
+        plan=build_edit_plan(
+            'Make a reel',
+            [{'id':'private-media-id','type':'video','duration':3,'filename':'private-client-name.mp4'}],
+            {'id':'private-project-id','width':1080,'height':1920,'private_note':'do not send'},
+            'A short transcript',
+        )
         self.assertEqual(plan['provider'],'openai_compatible')
         self.assertEqual(plan['aspect_ratio']['id'],'portrait')
         self.assertEqual(plan['suggestions'][0]['kind'],'hook')
         self.assertTrue(mocked.called)
+        request = mocked.call_args.args[0]
+        payload = json.loads(request.data.decode())
+        sent = json.loads(payload['messages'][1]['content'])
+        self.assertEqual(sent['project'], {'width':1080,'height':1920})
+        self.assertEqual(sent['assets'], [{'type':'video','duration':3.0}])
+        serialized = json.dumps(sent)
+        self.assertNotIn('private-project-id', serialized)
+        self.assertNotIn('private-media-id', serialized)
+        self.assertNotIn('private-client-name.mp4', serialized)
+        self.assertNotIn('do not send', serialized)
 
 if __name__=='__main__': unittest.main()
