@@ -473,6 +473,8 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
     duration = float(graph["video_duration"])
     width, height, fps = graph["width"], graph["height"], graph["frame_rate"]
     command += ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={duration}"]
+    # Name the generated background stream before it is used by the overlay chain.
+    filters.append("[0:v]setpts=PTS-STARTPTS[base]")
     ordered_video = sorted(enumerate(video_clips), key=lambda pair: (-pair[1]["track_index"], pair[1]["timeline_start"], pair[0]))
     overlay_label = "base"
     for visual_index, (original_index, clip) in enumerate(ordered_video):
