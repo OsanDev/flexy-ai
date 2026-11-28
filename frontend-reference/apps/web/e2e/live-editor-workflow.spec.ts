@@ -20,7 +20,7 @@ test("live browser workflow: register, upload media, edit timeline and download 
 
   try {
     page.on("response", async (response) => {
-      if (response.request().method() === "GET" && /\\/api\\/renders\\/[^/]+$/.test(new URL(response.url()).pathname)) {
+      if (response.request().method() === "GET" && new URL(response.url()).pathname.startsWith("/api/renders/") && !new URL(response.url()).pathname.endsWith("/download")) {
         latestRenderStatus = await response.json().catch(() => null) as { status: string; error?: string | null } | null;
       }
       if (response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/media")) {
