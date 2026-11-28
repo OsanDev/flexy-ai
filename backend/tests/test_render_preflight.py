@@ -109,3 +109,37 @@ def test_preflight_blocks_when_ffmpeg_is_unavailable(monkeypatch, tmp_path):
     report = inspect_render("project-a", graph)
     assert report["ready"] is False
     assert "FFmpeg is not available" in report["message"]
+
+
+def test_preflight_blocks_when_ffmpeg_has_no_supported_encoder(monkeypatch, tmp_path):
+    setup_project(monkeypatch, tmp_path)
+    monkeypatch.setattr("app.render_preflight.probe_video_encoders", lambda: {
+        "ffmpeg_available": True, "available": [], "hardware": [], "error": None,
+    })
+    graph = {"clips": [{"media_id": "video-1", "duration": 2}]}
+    report = inspect_render("project-a", graph)
+    assert report["ready"] is False
+    assert report["encoder"]["encoder"] is None
+    assert "no supported H.264 video encoder" in report["message"]
+
+
+def test_auto_encoder_uses_listed_hardware_when_software_encoder_is_absent():
+    from app.rendering import select_video_encoder
+
+    selected = select_video_encoder(capabilities={
+        "ffmpeg_available": True,
+        "available": ["h264_nvenc"],
+        "hardware": ["h264_nvenc"],
+        "error": None,
+    })
+    assert selected["encoder"] == "h264_nvenc"
+    assert selected["mode"] == "hardware"
+
+
+def test_auto_encoder_rejects_ffmpeg_without_supported_encoders():
+    from app.rendering import select_video_encoder
+
+    with pytest.raises(RenderValidationError, match="No supported H.264 video encoder"):
+        select_video_encoder(capabilities={
+            "ffmpeg_available": True, "available": [], "hardware": [], "error": None,
+        })
