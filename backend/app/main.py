@@ -223,7 +223,9 @@ def health():
         pass
 
     ffmpeg_available = shutil.which("ffmpeg") is not None
-    ready = database_available and storage_available
+    # The API's core media workflows require FFmpeg; report not-ready rather
+    # than accepting traffic that cannot probe, preview, or render media.
+    ready = database_available and storage_available and ffmpeg_available
     payload = {
         "status": "ok" if ready else "not_ready",
         "app": "FLEXY AI",
