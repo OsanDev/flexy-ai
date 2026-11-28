@@ -203,18 +203,28 @@ class SubtitleExportRequest(BaseModel):
     format: str = Field(default="srt", pattern="^(srt|vtt)$")
     include_speaker_labels: bool = False
 
+def _check_storage_directory_writable(directory: Path) -> None:
+    """Verify a mounted storage directory accepts a temporary create/delete cycle."""
+    probe = directory / f".flexy-health-{uuid.uuid4().hex}.tmp"
+    descriptor = os.open(probe, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        os.close(descriptor)
+    finally:
+        probe.unlink(missing_ok=True)
+
+
 @app.get("/api/health")
 def health():
-    """Readiness probe for the API, SQLite database, persistent storage and FFmpeg."""
+    """Readiness probe for the API, SQLite database, writable storage and FFmpeg."""
     database_available = False
     storage_available = False
     try:
         storage.ensure_dirs()
-        storage_available = (
-            storage.DATA_DIR.is_dir()
-            and storage.MEDIA_DIR.is_dir()
-            and storage.RENDER_DIR.is_dir()
-        )
+        for directory in (storage.DATA_DIR, storage.MEDIA_DIR, storage.RENDER_DIR):
+            if not directory.is_dir():
+                raise NotADirectoryError(str(directory))
+            _check_storage_directory_writable(directory)
+        storage_available = True
         with storage.connect() as db:
             db.execute("SELECT 1").fetchone()
         database_available = True
