@@ -49,3 +49,32 @@ def test_health_logs_readiness_component_flags_when_ffmpeg_is_missing(tmp_path, 
     assert "storage_available=True" in caplog.text
     assert "ffmpeg_available=False" in caplog.text
     assert '"ffmpeg_path":' not in response.body.decode()
+
+
+
+def test_health_detects_existing_but_unwritable_media_directory(tmp_path, monkeypatch, caplog):
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(storage, "DATA_DIR", data_dir)
+    monkeypatch.setattr(storage, "DB_PATH", data_dir / "flexy.sqlite3")
+    monkeypatch.setattr(storage, "MEDIA_DIR", data_dir / "media")
+    monkeypatch.setattr(storage, "RENDER_DIR", data_dir / "renders")
+    storage.init_db()
+
+    original_probe = main._check_storage_directory_writable
+
+    def deny_media_write(directory):
+        if directory == storage.MEDIA_DIR:
+            raise PermissionError("simulated media directory is not writable")
+        return original_probe(directory)
+
+    monkeypatch.setattr(main, "_check_storage_directory_writable", deny_media_write)
+    monkeypatch.setattr(main.shutil, "which", lambda _binary: "/usr/bin/ffmpeg")
+
+    with caplog.at_level(logging.ERROR):
+        response = main.health()
+
+    assert isinstance(response, Response)
+    assert response.status_code == 503
+    assert '"storage_available": false' in response.body.decode()
+    assert "simulated media directory is not writable" not in response.body.decode()
+    assert "PermissionError" in caplog.text
