@@ -184,6 +184,14 @@ def validate_render_graph(graph: dict[str, Any]) -> dict[str, Any]:
         for value, label in ((position_x, "position_x"), (position_y, "position_y")):
             if isinstance(value, bool) or not isinstance(value, (int, float)) or abs(value) > 7680:
                 raise RenderValidationError(f"Video {label} must be between -7680 and 7680.")
+        chroma_key_color = clip.get("chroma_key_color")
+        chroma_key_similarity = clip.get("chroma_key_similarity", 0.3)
+        chroma_key_blend = clip.get("chroma_key_blend", 0.1)
+        if chroma_key_color is not None and (not isinstance(chroma_key_color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", chroma_key_color)):
+            raise RenderValidationError("Video chroma_key_color must be a six-digit hex color.")
+        for value, label in ((chroma_key_similarity, "chroma_key_similarity"), (chroma_key_blend, "chroma_key_blend")):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+                raise RenderValidationError(f"Video {label} must be between 0 and 1.")
         clip_end = float(timeline_start) + float(duration)
         if not has_explicit_timeline_start:
             legacy_cursor = max(legacy_cursor, clip_end)
@@ -194,7 +202,10 @@ def validate_render_graph(graph: dict[str, Any]) -> dict[str, Any]:
                                  "timeline_start": float(timeline_start), "track_index": track_index,
                                  "transition": transition, "is_image": is_image,
                                  "opacity": float(opacity), "scale": float(scale),
-                                 "position_x": float(position_x), "position_y": float(position_y)})
+                                 "position_x": float(position_x), "position_y": float(position_y),
+                                 "chroma_key_color": chroma_key_color,
+                                 "chroma_key_similarity": float(chroma_key_similarity),
+                                 "chroma_key_blend": float(chroma_key_blend)})
 
     normalized_audio = []
     for clip in audio_clips:
@@ -541,6 +552,12 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
             fade_duration = min(0.45, max(0.08, clip_duration / 3))
             fade_out_start = max(0.0, clip_duration - fade_duration)
             video_filter += f",fade=t=in:st=0:d={fade_duration}:alpha=1,fade=t=out:st={fade_out_start}:d={fade_duration}:alpha=1"
+        if clip.get("chroma_key_color"):
+            key_rgb = clip["chroma_key_color"].lstrip("#")
+            video_filter += (
+                f",colorkey=0x{key_rgb}:{clip['chroma_key_similarity']}:"
+                f"{clip['chroma_key_blend']}"
+            )
         video_filter += (
             f",scale=iw*{clip['scale']}:ih*{clip['scale']},"
             f"colorchannelmixer=aa={clip['opacity']}"
