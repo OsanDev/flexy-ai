@@ -595,16 +595,19 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
         keyframes = clip.get("position_keyframes", [])
         if keyframes:
             def motion_expression(axis: str, base: float) -> str:
-                dimension = "W" if axis == "x" else "H"
+                main_dimension = "main_w" if axis == "x" else "main_h"
+                overlay_dimension = "overlay_w" if axis == "x" else "overlay_h"
                 values = [(float(point["time"]), float(point[axis])) for point in keyframes]
-                expression = f"({dimension}*{values[-1][1]}-{dimension}/2)"
+                def offset(value: float) -> str:
+                    return f"({main_dimension}*{value}-{overlay_dimension}/2)"
+                expression = offset(values[-1][1])
                 for (left_time, left_value), (right_time, right_value) in reversed(list(zip(values, values[1:]))):
-                    left_offset = dimension + f"*{left_value}-{dimension}/2"
-                    right_offset = dimension + f"*{right_value}-{dimension}/2"
+                    left_offset = offset(left_value)
+                    right_offset = offset(right_value)
                     span = max(0.001, right_time - left_time)
                     interpolated = f"({left_offset}+({right_offset}-{left_offset})*(t-{start + left_time})/{span})"
                     expression = f"if(lt(t,{start + right_time}),{interpolated},{expression})"
-                first_offset = f"({dimension}*{values[0][1]}-{dimension}/2)"
+                first_offset = offset(values[0][1])
                 return f"({base}+if(lt(t,{start + values[0][0]}),{first_offset},{expression}))"
             x_expression = motion_expression("x", position_x)
             y_expression = motion_expression("y", position_y)
