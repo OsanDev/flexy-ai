@@ -558,16 +558,21 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
                 f",colorkey=0x{key_rgb}:{clip['chroma_key_similarity']}:"
                 f"{clip['chroma_key_blend']}"
             )
+        # render_mp4 is also called directly by internal jobs and tests, so
+        # preserve compatibility with pre-VFX render graphs that were not
+        # passed through validate_render_graph.
+        clip_scale = clip.get("scale", 1.0)
+        clip_opacity = clip.get("opacity", 1.0)
         video_filter += (
-            f",scale=iw*{clip['scale']}:ih*{clip['scale']},"
-            f"colorchannelmixer=aa={clip['opacity']}"
+            f",scale=iw*{clip_scale}:ih*{clip_scale},"
+            f"colorchannelmixer=aa={clip_opacity}"
         )
         video_filter += f",setpts=PTS-STARTPTS+{start}/TB"
         clip_label = f"visual{visual_index}"
         filters.append(f"[{input_index}:v:0]{video_filter}[{clip_label}]")
         next_label = f"composite{visual_index}"
-        position_x = clip["position_x"]
-        position_y = clip["position_y"]
+        position_x = clip.get("position_x", 0)
+        position_y = clip.get("position_y", 0)
         filters.append(
             f"[{overlay_label}][{clip_label}]overlay=x='(W-w)/2+{position_x}':y='(H-h)/2+{position_y}':eof_action=pass:shortest=0:"
             f"enable='between(t,{start},{end})'[{next_label}]"
