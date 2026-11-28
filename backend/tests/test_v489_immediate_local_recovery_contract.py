@@ -3,9 +3,9 @@ from pathlib import Path
 
 def test_timeline_edits_write_local_recovery_before_waiting_for_react_effects():
     source = (Path(__file__).parents[2] / "frontend-reference/apps/web/src/App.tsx").read_text()
-    assert "function writeLocalRecoverySnapshot(projectId: string, document: TimelineDocument): boolean" in source
+    assert "function writeLocalRecoverySnapshot(accountId: string, projectId: string, document: TimelineDocument): boolean" in source
     callback = source.split("onDocumentChange={(next) => {", 1)[1].split("onGraphChange=", 1)[0]
-    assert "writeLocalRecoverySnapshot(targetProjectId, next)" in callback
+    assert "writeLocalRecoverySnapshot(accountId, targetProjectId, next)" in callback
     assert "loadedProjectId === targetProjectId" in callback
 
 
