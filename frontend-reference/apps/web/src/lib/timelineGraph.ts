@@ -10,6 +10,9 @@ export type VideoTimelineClip = {
   scale?: number;
   positionX?: number;
   positionY?: number;
+  chromaKeyColor?: string;
+  chromaKeySimilarity?: number;
+  chromaKeyBlend?: number;
 };
 
 export type AudioTimelineClip = {
@@ -99,6 +102,9 @@ export function buildRenderGraph(document: TimelineDocument): Record<string, unk
         scale: clip.scale ?? 1,
         position_x: clip.positionX ?? 0,
         position_y: clip.positionY ?? 0,
+        chroma_key_color: clip.chromaKeyColor ?? null,
+        chroma_key_similarity: clip.chromaKeySimilarity ?? 0.3,
+        chroma_key_blend: clip.chromaKeyBlend ?? 0.1,
       })),
     audio_clips: [...document.audioClips]
       .filter((clip) => !(document.hiddenAudioTracks ?? []).includes(clip.trackIndex))
@@ -172,6 +178,9 @@ export function validateTimelineDocument(document: TimelineDocument): string[] {
     if (clip.scale !== undefined && (!Number.isFinite(clip.scale) || clip.scale < 0.1 || clip.scale > 3)) errors.push(`Video clip ${clip.id} scale must be between 0.1 and 3.`);
     if (clip.positionX !== undefined && (!Number.isFinite(clip.positionX) || Math.abs(clip.positionX) > 7680)) errors.push(`Video clip ${clip.id} horizontal position is out of range.`);
     if (clip.positionY !== undefined && (!Number.isFinite(clip.positionY) || Math.abs(clip.positionY) > 7680)) errors.push(`Video clip ${clip.id} vertical position is out of range.`);
+    if (clip.chromaKeyColor !== undefined && !/^#[0-9a-fA-F]{6}$/.test(clip.chromaKeyColor)) errors.push(`Video clip ${clip.id} chroma key color must be a six-digit hex color.`);
+    if (clip.chromaKeySimilarity !== undefined && (!Number.isFinite(clip.chromaKeySimilarity) || clip.chromaKeySimilarity < 0 || clip.chromaKeySimilarity > 1)) errors.push(`Video clip ${clip.id} chroma key similarity must be between 0 and 1.`);
+    if (clip.chromaKeyBlend !== undefined && (!Number.isFinite(clip.chromaKeyBlend) || clip.chromaKeyBlend < 0 || clip.chromaKeyBlend > 1)) errors.push(`Video clip ${clip.id} chroma key blend must be between 0 and 1.`);
   }
   for (const clip of document.audioClips) {
     if (!clip.mediaId.trim()) errors.push(`Audio clip ${clip.id} needs a media ID.`);
