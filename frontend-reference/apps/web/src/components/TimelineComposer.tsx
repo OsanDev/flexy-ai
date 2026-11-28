@@ -111,6 +111,11 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
   const [beatAnalysisTarget, setBeatAnalysisTarget] = useState("");
   const [beatAnalysisError, setBeatAnalysisError] = useState("");
   const [showMusicTransitionSuggestions, setShowMusicTransitionSuggestions] = useState(false);
+  const [trackingPointX, setTrackingPointX] = useState("0.5");
+  const [trackingPointY, setTrackingPointY] = useState("0.5");
+  const [motionTracking, setMotionTracking] = useState<MotionTrackingResult | null>(null);
+  const [motionTrackingBusy, setMotionTrackingBusy] = useState(false);
+  const [motionTrackingError, setMotionTrackingError] = useState("");
 
   const selectedVideo = selectedClip?.type === "video" ? doc.videoClips.find((x) => x.id === selectedClip.id) : undefined;
   const selectedVideoOrder = selectedVideo ? [...doc.videoClips].sort((x, y) => x.timelineStart - y.timelineStart) : [];
@@ -225,6 +230,43 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
     }
     update(nextDocument);
     setAudioMixPlan(null);
+  };
+
+  const runMotionTracking = async () => {
+    if (!selectedVideo || motionTrackingBusy) return;
+    const x = Number(trackingPointX);
+    const y = Number(trackingPointY);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) {
+      setMotionTrackingError("Enter normalized X and Y values between 0 and 1.");
+      return;
+    }
+    setMotionTrackingBusy(true);
+    setMotionTrackingError("");
+    setMotionTracking(null);
+    try {
+      const result = await mediaApi.trackPoint(projectId, selectedVideo.mediaId, {
+        x, y, start: selectedVideo.sourceStart,
+        duration: Math.max(0.5, Math.min(8, selectedVideo.duration)), sampleFps: 2,
+      });
+      setMotionTracking(result);
+    } catch (cause) {
+      setMotionTrackingError(cause instanceof Error ? cause.message : "Motion tracking failed.");
+    } finally {
+      setMotionTrackingBusy(false);
+    }
+  };
+  const applyMotionTracking = () => {
+    if (!selectedVideo || !motionTracking || motionTracking.keyframes.length < 2) return;
+    const keyframes = motionTracking.keyframes
+      .map((point) => ({ time: Number((point.time - selectedVideo.sourceStart).toFixed(3)), x: point.x, y: point.y, confidence: point.confidence }))
+      .filter((point) => point.time >= 0 && point.time <= selectedVideo.duration)
+      .sort((a, b) => a.time - b.time);
+    if (keyframes.length < 2) {
+      setMotionTrackingError("Not enough keyframes fall inside this clip. Try a longer clip.");
+      return;
+    }
+    patchSelected({ positionKeyframes: keyframes });
+    setMotionTrackingError("");
   };
 
   const runBeatAnalysis = async (mediaId: string) => {
@@ -1480,6 +1522,22 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
           <label>Key similarity<input type="number" min="0" max="1" step=".05" value={selectedVideo.chromaKeySimilarity ?? 0.3} onChange={(e) => patchSelected({ chromaKeySimilarity: Math.min(1, Math.max(0, numberValue(e.target.value, selectedVideo.chromaKeySimilarity ?? 0.3))) })}/></label>
           <label>Key edge blend<input type="number" min="0" max="1" step=".05" value={selectedVideo.chromaKeyBlend ?? 0.1} onChange={(e) => patchSelected({ chromaKeyBlend: Math.min(1, Math.max(0, numberValue(e.target.value, selectedVideo.chromaKeyBlend ?? 0.1))) })}/></label>
           <small>Use transparent-background CGI renders (such as alpha-channel video) or key out a green-screen render, then composite it over lower tracks. These are compositing controls, not a built-in 3D model renderer.</small>
+          <div className="motion-tracking-controls">
+            <p className="eyebrow">MOTION TRACKING</p>
+            <label>Point X (0 to 1)<input aria-label="Motion tracking point X" type="number" min="0" max="1" step=".01" value={trackingPointX} onChange={(e) => setTrackingPointX(e.target.value)}/></label>
+            <label>Point Y (0 to 1)<input aria-label="Motion tracking point Y" type="number" min="0" max="1" step=".01" value={trackingPointY} onChange={(e) => setTrackingPointY(e.target.value)}/></label>
+            <button type="button" onClick={runMotionTracking} disabled={motionTrackingBusy || !selectedVideoAsset?.mime_type.startsWith("video/")}>
+              {motionTrackingBusy ? "Tracking point…" : "Analyze motion"}
+            </button>
+            <small>Choose a point's approximate position in the source frame using normalized coordinates. The tracker follows a small visual patch for up to 8 seconds.</small>
+            {motionTrackingError && <small role="alert">{motionTrackingError}</small>}
+            {motionTracking && <div className="motion-tracking-result">
+              <strong>{motionTracking.frame_count} tracking keyframes {motionTracking.complete ? "captured" : "captured (partial track)"}</strong>
+              <small>{motionTracking.notice}</small>
+              <button type="button" onClick={applyMotionTracking} disabled={motionTracking.keyframes.length < 2}>Apply tracked movement to this clip</button>
+            </div>}
+            {selectedVideo.positionKeyframes?.length ? <small>Applied motion path: {selectedVideo.positionKeyframes.length} keyframes. Re-run tracking to replace it.</small> : null}
+          </div>
         </div>}
         {selectedVideo && <div className="clip-refinement">
           <strong>Quick AI editing suggestions</strong>
