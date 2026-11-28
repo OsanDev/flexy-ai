@@ -3,7 +3,7 @@
 **FLEXY AI** is a browser-based, multi-track video-editing application in active development. The project combines a React + TypeScript + Vite editor with a Python + FastAPI backend and FFmpeg-based media processing.
 
 > **Current package:** `4.6.0` (integrated local-run release candidate)  
-> **Release status:** Ready for local setup and team evaluation after dependencies are installed; not certified for public production use. Backend and timeline tests are available, but the full frontend production build and a live browser upload-to-export workflow have not yet been verified in this environment.
+> **Verification status:** The working branch passes backend tests (572 passed), real FFmpeg MP4 smoke tests, frontend TypeScript/timeline checks, the Vite production build, and both mocked and live Playwright browser workflows. The live browser workflow registers an account, uploads a real video, edits the timeline, renders through the backend, and verifies the downloaded MP4 container. This is a verified development build, not a public-production certification.
 
 > **Team walkthrough:** See [`docs/TEAM_DEMO_GUIDE_2026-11-27.md`](docs/TEAM_DEMO_GUIDE_2026-11-27.md) for a timed demo script, startup commands, verified checks, and release caveats.
 
@@ -182,7 +182,7 @@ python -m compileall -q app
 python -m pytest -q -rs
 ```
 
-Install FFmpeg and FFprobe before running the real MP4 render smoke test. The current working branch does not yet contain an active GitHub Actions CI workflow, so these checks must be run manually until workflow permissions and configuration are in place.
+Install FFmpeg and FFprobe before running the real MP4 render smoke test. The working branch runs these checks automatically in GitHub Actions, including the real MP4 render smoke tests.
 
 ### Frontend checks
 
@@ -211,7 +211,11 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-**Important:** The current Playwright workflow mocks `/api/**` responses. It checks the browser UI flow, including sign-in, import interaction, timeline edits, autosave UI, and the download interaction. It is **not** a live-backend end-to-end test. It does not upload real media to a live backend or validate a real exported MP4. The backend real-render smoke test is a separate check.
+The Playwright suite contains two workflows:
+- **Mocked browser workflow:** checks sign-in, import interaction, timeline edits, autosave UI, and the download interaction with mocked API responses.
+- **Live browser workflow:** starts an isolated FastAPI backend, registers an account, creates a project, uploads a generated video file, edits the timeline, runs FFmpeg rendering, downloads the resulting MP4, and checks the MP4 container signature.
+
+Both run in GitHub Actions. The live workflow complements the backend FFmpeg smoke tests; it does not replace real-device testing or production deployment checks.
 
 ## Docker backend
 
