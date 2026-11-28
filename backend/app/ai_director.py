@@ -64,9 +64,24 @@ def _provider_plan(
     model: str,
     tier: str,
 ) -> dict[str, Any]:
+    # Send only the metadata needed for planning. Internal project/media IDs,
+    # original filenames, and unrelated client project fields stay on our server.
+    safe_project = {
+        key: project[key]
+        for key in ("width", "height", "frame_rate", "duration")
+        if isinstance(project.get(key), (int, float)) and not isinstance(project.get(key), bool)
+    }
+    safe_assets = [
+        {
+            "type": asset.get("type"),
+            "duration": max(0.0, min(86400.0, float(asset.get("duration") or 0))),
+        }
+        for asset in assets[:100]
+        if asset.get("type") in ("video", "audio", "image")
+    ]
     payload = {"model": model, "temperature": 0.3, "response_format": {"type": "json_object"}, "messages": [
         {"role": "system", "content": "You are FLEXY AI Director. Return JSON keys summary, aspect_ratio_id, suggestions, warnings. aspect_ratio_id must be portrait, landscape, or square. suggestions is an array of {kind,title,detail}. Never claim to inspect frames or hear audio. Use only supplied metadata/transcript. Suggestions must be editable and non-destructive."},
-        {"role": "user", "content": json.dumps({"instruction": instruction[:4000], "project": project, "assets": assets[:100], "transcript": transcript[:12000], "presets": PRESETS}, ensure_ascii=False)}
+        {"role": "user", "content": json.dumps({"instruction": instruction[:4000], "project": safe_project, "assets": safe_assets, "transcript": transcript[:12000], "presets": PRESETS}, ensure_ascii=False)}
     ]}
     if model.startswith("glm-5.3"):
         payload["reasoning_effort"] = "low"
