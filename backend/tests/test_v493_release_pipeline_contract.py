@@ -12,11 +12,16 @@ def test_backend_and_frontend_versions_are_aligned():
     assert package["version"] == "4.6.0"
 
 
-def test_browser_workflow_discloses_mocked_api():
-    test_source = (ROOT / "frontend-reference/apps/web/e2e/editor-workflow.spec.ts").read_text()
-    assert 'test("mocked browser workflow:' in test_source
+def test_browser_workflows_disclose_mocked_and_live_coverage():
+    mocked = (ROOT / "frontend-reference/apps/web/e2e/editor-workflow.spec.ts").read_text()
+    live = (ROOT / "frontend-reference/apps/web/e2e/live-editor-workflow.spec.ts").read_text()
+    assert 'test("mocked browser workflow:' in mocked
+    assert 'test("live browser workflow:' in live
+    assert "uploads a real video" in live or "setInputFiles(source)" in live
+    assert "downloads the resulting MP4" in live or 'toBe("ftyp")' in live
     readme = (ROOT / "README.md").read_text()
-    assert "It is **not** a live-backend end-to-end test." in readme
+    assert "Mocked browser workflow" in readme
+    assert "Live browser workflow" in readme
 
 
 def test_export_ui_requires_successful_preflight_before_queueing():
