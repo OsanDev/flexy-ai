@@ -36,7 +36,7 @@ The feature list describes code included in this development package. It is not 
 │       ├── e2e/                    # Playwright browser workflow (mock API)
 │       └── scripts/                # Timeline-core checks
 ├── docs/                           # Integration notes and release notes
-└── .github/workflows/ci.yml        # GitHub Actions verification workflow
+
 ```
 
 ## Quick start
@@ -182,7 +182,7 @@ python -m compileall -q app
 python -m pytest -q -rs
 ```
 
-Install FFmpeg and FFprobe before running the real MP4 render smoke test. The CI workflow installs both explicitly.
+Install FFmpeg and FFprobe before running the real MP4 render smoke test. The current working branch does not yet contain an active GitHub Actions CI workflow, so these checks must be run manually until workflow permissions and configuration are in place.
 
 ### Frontend checks
 
