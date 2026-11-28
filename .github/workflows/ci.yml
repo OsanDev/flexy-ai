@@ -100,8 +100,38 @@ jobs:
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright Chromium and FFmpeg
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
-      - name: Run mocked browser workflow
+      - name: Set up Python for live API
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Start isolated live backend
+        env:
+          FLEXY_DATA_DIR: /tmp/flexy-live-e2e-data
+          FLEXY_CORS_ORIGINS: http://127.0.0.1:4173
+          FLEXY_COOKIE_SECURE: "false"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/flexy-live-backend.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail http://127.0.0.1:8000/api/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/flexy-live-backend.log
+          exit 1
+
+      - name: Run mocked and live browser workflows
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8000
         run: npm run test:e2e
