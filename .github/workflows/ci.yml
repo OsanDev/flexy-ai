@@ -89,8 +89,11 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Validate Compose configuration
-        run: docker compose config --quiet
+      - name: Validate Compose configuration and persistent data mount
+        run: |
+          docker compose config --quiet
+          docker compose config --format json > /tmp/flexy-compose.json
+          python -c 'import json; config=json.load(open("/tmp/flexy-compose.json")); mounts=config["services"]["backend"]["volumes"]; assert any(mount["type"] == "volume" and mount["target"] == "/data" for mount in mounts), mounts'
 
       - name: Build backend and frontend images
         run: docker compose build
