@@ -1389,7 +1389,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
             <option value="ko">Korean</option><option value="pt">Portuguese</option><option value="ar">Arabic</option>
           </select></label>
           <button type="button" onClick={() => void runTranscription()} disabled={!transcriptionMediaId || transcriptionBusy}>
-            {transcriptionBusy ? "Analyzing audio…" : "Generate captions / lyrics"}
+            {transcriptionBusy ? "Analyzing audio…" : "Generate subtitles, captions + lyrics"}
           </button>
           {transcriptionError && <p className="command-error" role="alert">{transcriptionError}</p>}
           {transcription && <div className="speech-caption-preview" aria-live="polite">
@@ -1469,6 +1469,14 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
           <label>Duration (s)<input type="number" min=".1" step=".1" value={selectedVideo.duration} onChange={(e) => patchSelected({ duration: numberValue(e.target.value, selectedVideo.duration, .1) })}/></label>
           <label>Track (0-7)<input type="number" min="0" max="7" step="1" value={selectedVideo.trackIndex} onChange={(e) => patchSelected({ trackIndex: Math.min(7, numberValue(e.target.value, selectedVideo.trackIndex)) })}/></label>
           <label>Transition<select value={selectedVideo.transition} onChange={(e) => patchSelected({ transition: e.target.value as "none" | "fade" | "crossfade" })}><option value="none">None</option><option value="fade">Fade</option><option value="crossfade">Crossfade</option></select></label>
+        </div>}
+        {selectedVideo && <div className="form-grid vfx-controls" aria-label="Visual effects transform controls">
+          <p className="eyebrow">VFX · COMPOSITING TRANSFORM</p>
+          <label>Opacity (%)<input type="number" min="0" max="100" step="1" value={Math.round((selectedVideo.opacity ?? 1) * 100)} onChange={(e) => patchSelected({ opacity: Math.min(1, Math.max(0, numberValue(e.target.value, Math.round((selectedVideo.opacity ?? 1) * 100)))) / 100 })}/></label>
+          <label>Scale (%)<input type="number" min="10" max="300" step="1" value={Math.round((selectedVideo.scale ?? 1) * 100)} onChange={(e) => patchSelected({ scale: Math.min(3, Math.max(.1, numberValue(e.target.value, Math.round((selectedVideo.scale ?? 1) * 100), 10) / 100)) })}/></label>
+          <label>Position X (px)<input type="number" min="-7680" max="7680" step="1" value={selectedVideo.positionX ?? 0} onChange={(e) => patchSelected({ positionX: Math.max(-7680, Math.min(7680, numberValue(e.target.value, selectedVideo.positionX ?? 0))) })}/></label>
+          <label>Position Y (px)<input type="number" min="-7680" max="7680" step="1" value={selectedVideo.positionY ?? 0} onChange={(e) => patchSelected({ positionY: Math.max(-7680, Math.min(7680, numberValue(e.target.value, selectedVideo.positionY ?? 0))) })}/></label>
+          <small>These transforms are applied during FFmpeg export. Track order controls which layer appears on top.</small>
         </div>}
         {selectedVideo && <div className="clip-refinement">
           <strong>Quick AI editing suggestions</strong>
