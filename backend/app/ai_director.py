@@ -41,14 +41,43 @@ def _local_plan(instruction: str, assets: list[dict[str, Any]], project: dict[st
             "timeline_draft":_build_timeline_draft(instruction, assets, project)}
 
 
+def _needs_advanced_model(instruction: str, assets: list[dict[str, Any]]) -> bool:
+    """Route only genuinely involved editing requests to the stronger model."""
+    text = instruction.casefold()
+    advanced_terms = (
+        "multi-clip", "multiple clips", "storyboard", "scene analysis", "analyze scenes",
+        "motion track", "motion tracking", "composit", "green screen", "chroma key",
+        "visual effects", "vfx", "match cut", "beat sync", "sequence", "narrative",
+        "color grade", "camera movement", "detailed edit", "complex edit",
+    )
+    return len(assets) >= 8 or any(term in text for term in advanced_terms)
+
+
 def _model_plan(instruction: str, assets: list[dict[str, Any]], project: dict[str, Any], transcript: str) -> dict[str, Any] | None:
-    key = os.getenv("FLEXY_AI_API_KEY", "").strip()
+    advanced = _needs_advanced_model(instruction, assets)
+    if advanced:
+        key = os.getenv("FLEXY_AI_ADVANCED_API_KEY", "").strip()
+        base = os.getenv("FLEXY_AI_ADVANCED_BASE_URL", "https://api.z.ai/api/paas/v4").rstrip("/")
+        model = os.getenv("FLEXY_AI_ADVANCED_MODEL", "glm-5.3-flash")
+        tier = "advanced"
+    else:
+        key = os.getenv("FLEXY_AI_API_KEY", "").strip()
+        base = os.getenv("FLEXY_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        model = os.getenv("FLEXY_AI_MODEL", "gpt-4o-mini")
+        tier = "fast"
+    # If the advanced provider is not configured, keep the fast provider available.
+    if not key and advanced:
+        key = os.getenv("FLEXY_AI_API_KEY", "").strip()
+        base = os.getenv("FLEXY_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        model = os.getenv("FLEXY_AI_MODEL", "gpt-4o-mini")
+        tier = "fast_fallback"
     if not key: return None
-    base = os.getenv("FLEXY_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    model = os.getenv("FLEXY_AI_MODEL", "gpt-4o-mini")
     payload = {"model":model,"temperature":0.3,"response_format":{"type":"json_object"},"messages":[
         {"role":"system","content":"You are FLEXY AI Director. Return JSON keys summary, aspect_ratio_id, suggestions, warnings. aspect_ratio_id must be portrait, landscape, or square. suggestions is an array of {kind,title,detail}. Never claim to inspect frames or hear audio. Use only supplied metadata/transcript. Suggestions must be editable and non-destructive."},
         {"role":"user","content":json.dumps({"instruction":instruction[:4000],"project":project,"assets":assets[:100],"transcript":transcript[:12000],"presets":PRESETS},ensure_ascii=False)}]}
+    # GLM-5.3-Flash supports low reasoning effort, avoiding its default maximum effort.
+    if model.startswith("glm-5.3"):
+        payload["reasoning_effort"] = "low"
     req = urllib.request.Request(base+"/chat/completions",data=json.dumps(payload).encode(),headers={"Authorization":f"Bearer {key}","Content-Type":"application/json"},method="POST")
     try:
         with urllib.request.urlopen(req,timeout=35) as response: raw=json.loads(response.read().decode())
@@ -61,7 +90,7 @@ def _model_plan(instruction: str, assets: list[dict[str, Any]], project: dict[st
             if isinstance(item,dict): safe.append({"kind":str(item.get("kind","review"))[:40],"title":str(item.get("title","Review suggestion"))[:120],"detail":str(item.get("detail","Review before applying."))[:600]})
         if not safe: raise ValueError("No usable suggestions")
         warnings=parsed.get("warnings",[])
-        return {"provider":"openai_compatible","model":model,"plan_version":"0.9.0","project_id":project.get("id"),"instruction":instruction,
+        return {"provider":"openai_compatible","model":model,"model_tier":tier,"plan_version":"0.9.0","project_id":project.get("id"),"instruction":instruction,
                 "summary":str(parsed.get("summary","AI-generated edit plan"))[:500],"aspect_ratio":preset,
                 "asset_summary":{k:sum(a.get("type")==k for a in assets) for k in ("video","audio","image")},"suggestions":safe,
                 "warnings":[str(w)[:300] for w in warnings[:8]] if isinstance(warnings,list) else [],
