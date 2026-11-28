@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { MediaAsset, WaveformData, TranscriptionResult, AudioQualityResult, DialogueEditPlan } from "../lib/mediaApi";
+import type { MediaAsset, WaveformData, TranscriptionResult, AudioQualityResult, DialogueEditPlan, MotionTrackingResult } from "../lib/mediaApi";
 import { PlaybackPreview } from "./PlaybackPreview";
 import { AudioAutomationCurve } from "./AudioAutomationCurve";
 import { planTimelineCommand, type TimelineCommandPlan } from "../lib/timelineCommands";
