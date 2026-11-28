@@ -251,3 +251,70 @@ def test_real_ffmpeg_render_applies_cgi_chroma_key_and_vfx_transform(tmp_path: P
         f"Expected the red CGI foreground object to remain visible, got {center}"
     )
     assert output.stat().st_size > 1_000
+
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg tools are not installed")
+def test_real_ffmpeg_render_moves_chroma_keyed_overlay_with_motion_keyframes(tmp_path: Path):
+    """Verify motion keyframes move a keyed foreground object in the encoded MP4."""
+    if "libx264" not in probe_video_encoders().get("available", []):
+        pytest.skip("This FFmpeg build does not include the libx264 encoder")
+
+    source = tmp_path / "tracked-overlay.mp4"
+    output = tmp_path / "tracked-motion-export.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=0x00ff00:s=64x64:r=24:d=1",
+            "-vf", "drawbox=x=24:y=24:w=16:h=16:color=red:t=fill",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+        ],
+        check=True, capture_output=True, text=True, timeout=30,
+    )
+
+    render_mp4(
+        {
+            "clips": [{
+                "path": str(source), "source_start": 0.0, "duration": 1.0,
+                "timeline_start": 0.0, "track_index": 0, "transition": "none",
+                "is_image": False, "opacity": 1.0, "scale": 1.0,
+                "position_x": 0, "position_y": 0,
+                "chroma_key_color": "#00ff00",
+                "chroma_key_similarity": 0.25, "chroma_key_blend": 0.05,
+                "position_keyframes": [
+                    {"time": 0.0, "x": 0.25, "y": 0.5},
+                    {"time": 1.0, "x": 0.75, "y": 0.5},
+                ],
+            }],
+            "audio_clips": [], "captions": [], "video_duration": 1.0,
+            "width": 64, "height": 64, "frame_rate": 24, "video_bitrate": "2M",
+        },
+        output,
+    )
+
+    def sample_pixel(timestamp: float, x: int, y: int) -> tuple[int, int, int]:
+        sampled = subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", str(timestamp),
+                "-i", str(output), "-vf", f"crop=2:2:{x}:{y}", "-frames:v", "1",
+                "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+            ],
+            check=True, capture_output=True, timeout=15,
+        ).stdout
+        assert len(sampled) == 12
+        return tuple(sum(sampled[channel::3]) // 4 for channel in range(3))
+
+    early_position = sample_pixel(0.1, 16, 32)
+    late_position = sample_pixel(0.9, 48, 32)
+    early_old_position = sample_pixel(0.1, 48, 32)
+    late_old_position = sample_pixel(0.9, 16, 32)
+
+    assert early_position[0] > early_position[1] * 1.5 and early_position[0] > early_position[2] * 1.5, (
+        f"Expected red foreground at its initial tracked position, got {early_position}"
+    )
+    assert late_position[0] > late_position[1] * 1.5 and late_position[0] > late_position[2] * 1.5, (
+        f"Expected red foreground at its final tracked position, got {late_position}"
+    )
+    assert max(early_old_position) < 40, f"Expected old position to be empty after movement, got {early_old_position}"
+    assert max(late_old_position) < 40, f"Expected initial position to be empty after movement, got {late_old_position}"
+    assert output.stat().st_size > 1_000
