@@ -81,6 +81,20 @@ jobs:
       - name: Production build
         run: npm run build
 
+  containers:
+    name: Docker Compose configuration and image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Build backend and frontend images
+        run: docker compose build
+
   browser:
     name: Playwright browser workflow
     runs-on: ubuntu-24.04
