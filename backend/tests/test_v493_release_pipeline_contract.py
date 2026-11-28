@@ -32,3 +32,16 @@ def test_browser_workflow_discloses_mocked_api():
     assert 'test("mocked browser workflow:' in test_source
     readme = (ROOT / "README.md").read_text()
     assert "It is **not** a live-backend end-to-end test." in readme
+
+
+def test_export_ui_requires_successful_preflight_before_queueing():
+    panel = (ROOT / "frontend-reference/apps/web/src/components/ExportPanel.tsx").read_text()
+    assert "disabled={busy || preflight?.ready !== true}" in panel
+    assert "if (report.ready !== true)" in panel
+    assert "await renderApi.create(projectId, exportGraph)" in panel
+    assert panel.index("if (report.ready !== true)") < panel.index("await renderApi.create(projectId, exportGraph)")
+
+
+def test_health_readiness_requires_ffmpeg_for_media_operations():
+    main = (ROOT / "backend/app/main.py").read_text()
+    assert "ready = database_available and storage_available and ffmpeg_available" in main
