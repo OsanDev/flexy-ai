@@ -1476,7 +1476,10 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
           <label>Scale (%)<input type="number" min="10" max="300" step="1" value={Math.round((selectedVideo.scale ?? 1) * 100)} onChange={(e) => patchSelected({ scale: Math.min(3, Math.max(.1, numberValue(e.target.value, Math.round((selectedVideo.scale ?? 1) * 100), 10) / 100)) })}/></label>
           <label>Position X (px)<input type="number" min="-7680" max="7680" step="1" value={selectedVideo.positionX ?? 0} onChange={(e) => patchSelected({ positionX: Math.max(-7680, Math.min(7680, numberValue(e.target.value, selectedVideo.positionX ?? 0))) })}/></label>
           <label>Position Y (px)<input type="number" min="-7680" max="7680" step="1" value={selectedVideo.positionY ?? 0} onChange={(e) => patchSelected({ positionY: Math.max(-7680, Math.min(7680, numberValue(e.target.value, selectedVideo.positionY ?? 0))) })}/></label>
-          <small>These transforms are applied during FFmpeg export. Track order controls which layer appears on top.</small>
+          <label>CGI green-screen key<input aria-label="CGI green-screen key color" type="color" value={selectedVideo.chromaKeyColor ?? "#00ff00"} onChange={(e) => patchSelected({ chromaKeyColor: e.target.value })}/></label>
+          <label>Key similarity<input type="number" min="0" max="1" step=".05" value={selectedVideo.chromaKeySimilarity ?? 0.3} onChange={(e) => patchSelected({ chromaKeySimilarity: Math.min(1, Math.max(0, numberValue(e.target.value, selectedVideo.chromaKeySimilarity ?? 0.3))) })}/></label>
+          <label>Key edge blend<input type="number" min="0" max="1" step=".05" value={selectedVideo.chromaKeyBlend ?? 0.1} onChange={(e) => patchSelected({ chromaKeyBlend: Math.min(1, Math.max(0, numberValue(e.target.value, selectedVideo.chromaKeyBlend ?? 0.1))) })}/></label>
+          <small>Use transparent-background CGI renders (such as alpha-channel video) or key out a green-screen render, then composite it over lower tracks. These are compositing controls, not a built-in 3D model renderer.</small>
         </div>}
         {selectedVideo && <div className="clip-refinement">
           <strong>Quick AI editing suggestions</strong>
