@@ -490,7 +490,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
     }
   };
 
-  const importTranscription = () => {
+  const importTranscription = (mode: "captions" | "lyrics" = "captions") => {
     if (!transcription?.segments?.length) return;
     const existing = new Set(doc.captions.map((item) => item.id));
     const videoUse = doc.videoClips.filter((clip) => clip.mediaId === transcription.media_id)
@@ -520,9 +520,9 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
         text: cue.text,
         start: Math.max(0, start + timelineOffset),
         duration: Math.max(0, end - start),
-        ...(wordTimings.length ? {
-          wordTimings,
-          style: { preset: "neon" as const, position: "bottom" as const, fontSize: 34,
+        ...(mode === "lyrics" || wordTimings.length ? {
+          ...(wordTimings.length ? { wordTimings } : {}),
+          style: { preset: "neon" as const, position: "bottom" as const, fontSize: mode === "lyrics" ? 38 : 34,
             color: "#f8fbff", backgroundColor: "#071321c9", bold: true,
             animation: "karaoke" as const, animationDuration: 0.45 },
         } : {}),
@@ -1375,8 +1375,8 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
 
       {tab === "captions" && <div className="timeline-form">
         <section className="speech-caption-panel" aria-label="AI subtitle generation">
-          <div><p className="eyebrow">AI SUBTITLE GENERATION</p><h3>Transcribe a media clip</h3></div>
-          <small>Creates timestamped draft captions from spoken audio using the configured speech provider. Requires backend speech credentials and FFmpeg/FFprobe. Long files are converted to audio-only chunks automatically, with timestamps restored to the original clip. No synthetic transcript is created when unavailable.</small>
+          <div><p className="eyebrow">AI CAPTIONS + LYRICS</p><h3>Generate synced captions or song lyrics</h3></div>
+          <small>Analyze speech or vocals in a video/audio track and create timestamped text. Song-vocal recognition depends on the configured speech model and may need lyric corrections. Word-level timings are used when the provider returns them; otherwise karaoke highlighting uses an estimated word cadence. Requires backend speech credentials and FFmpeg/FFprobe.</small>
           <label>Source media<select value={transcriptionMediaId} onChange={(e) => setTranscriptionMediaId(e.target.value)}>
             <option value="">Choose video or audio</option>
             {assets.filter((asset) => asset.mime_type.startsWith("video/") || asset.mime_type.startsWith("audio/")).map((asset) =>
@@ -1389,7 +1389,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
             <option value="ko">Korean</option><option value="pt">Portuguese</option><option value="ar">Arabic</option>
           </select></label>
           <button type="button" onClick={() => void runTranscription()} disabled={!transcriptionMediaId || transcriptionBusy}>
-            {transcriptionBusy ? "Transcribing…" : "Generate subtitles"}
+            {transcriptionBusy ? "Analyzing audio…" : "Generate captions / lyrics"}
           </button>
           {transcriptionError && <p className="command-error" role="alert">{transcriptionError}</p>}
           {transcription && <div className="speech-caption-preview" aria-live="polite">
@@ -1441,7 +1441,8 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
               <button type="button" onClick={() => void downloadTranscription("srt")}>Export SRT</button>
               <button type="button" onClick={() => void downloadTranscription("vtt")}>Export VTT</button>
               <button type="button" onClick={() => setTranscription(null)}>Discard</button>
-              <button type="button" className="primary" onClick={importTranscription}>Import {buildSpeechCaptionCues(transcription.segments).length} smart captions</button>
+              <button type="button" onClick={() => importTranscription("captions")}>Import {buildSpeechCaptionCues(transcription.segments).length} smart captions</button>
+              <button type="button" className="primary" onClick={() => importTranscription("lyrics")}>Add as synced song lyrics</button>
             </div>
           </div>}
         </section>
