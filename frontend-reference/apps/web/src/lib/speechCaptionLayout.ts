@@ -1,6 +1,6 @@
 export type SpeechSegment = { id: string; start: number; end: number; text: string; speaker_id?: string; words?: Array<{ word: string; start: number; end: number }> };
 
-export type SpeechCaptionCue = { start: number; end: number; text: string; wordTimed: boolean; speakerId?: string };
+export type SpeechCaptionCue = { start: number; end: number; text: string; wordTimed: boolean; wordTimings?: TimedWord[]; speakerId?: string };
 
 type TimedWord = { word: string; start: number; end: number };
 
@@ -37,7 +37,7 @@ export function buildSpeechCaptionCues(
       const text = group.map((word) => word.word.trim()).join(" ").replace(/\s+([,.;:!?])/g, "$1");
       const start = Math.max(segment.start, group[0].start);
       const end = Math.min(segment.end, group[group.length - 1].end);
-      if (text && end > start) cues.push({ start, end, text, wordTimed: true, ...(segment.speaker_id ? { speakerId: segment.speaker_id } : {}) });
+      if (text && end > start) cues.push({ start, end, text, wordTimed: true, wordTimings: group.map((word) => ({ ...word })), ...(segment.speaker_id ? { speakerId: segment.speaker_id } : {}) });
       group = [];
     };
 
