@@ -62,8 +62,10 @@ def validate_project_render_graph(project_id: str, graph: dict[str, Any], owner_
     except RenderValidationError as exc:
         encoder_choice = {"encoder": None, "mode": "unavailable", "note": str(exc)}
     ffmpeg_available = bool(encoder_capabilities.get("ffmpeg_available"))
+    encoder_available = bool(encoder_choice.get("encoder"))
+    ready = ffmpeg_available and encoder_available
     report = {
-        "ready": ffmpeg_available,
+        "ready": ready,
         "encoder": encoder_choice,
         "encoder_capabilities": encoder_capabilities,
         "project_id": project_id,
@@ -78,8 +80,10 @@ def validate_project_render_graph(project_id: str, graph: dict[str, Any], owner_
         "checked_media_count": len(checked_media),
         "warnings": warnings,
         "message": ("Preflight passed. Review warnings before starting the render."
-                    if ffmpeg_available else
-                    "Preflight blocked: FFmpeg is not available on this render server."),
+                    if ready else
+                    "Preflight blocked: FFmpeg is not available on this render server."
+                    if not ffmpeg_available else
+                    "Preflight blocked: no supported H.264 video encoder is available."),
         "encoder_warning": ("FFmpeg lists a hardware encoder, but actual device/driver support must be verified by a render."
                             if encoder_choice.get("mode") == "hardware" else None),
     }
