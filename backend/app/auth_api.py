@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hmac, os, secrets
+import hashlib, hmac, os, secrets, time
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from . import storage
@@ -9,19 +9,25 @@ from .auth_core import (AuthError, InvalidCredentials, authenticate, create_sess
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 COOKIE = "flexy_session"
 CSRF = "flexy_csrf"
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_MAX_FAILURES = 5
+
 
 class Credentials(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=12, max_length=1024)
 
+
 def _origins():
     raw = os.getenv("FLEXY_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
     return {v.strip().rstrip("/") for v in raw.split(",") if v.strip()}
+
 
 def _origin_check(request: Request):
     origin = request.headers.get("origin", "").rstrip("/")
     if not origin or origin not in _origins():
         raise HTTPException(403, "Untrusted request origin.")
+
 
 def _csrf_check(request: Request):
     _origin_check(request)
@@ -29,6 +35,56 @@ def _csrf_check(request: Request):
     b = request.headers.get("x-csrf-token", "")
     if not a or not b or not hmac.compare_digest(a, b):
         raise HTTPException(403, "CSRF validation failed.")
+
+
+def _login_key(request: Request, email: str) -> str:
+    # Store only a digest, never raw email addresses or client IPs, in limiter state.
+    client_ip = request.client.host if request.client else "unknown"
+    value = f"{email.strip().casefold()}\0{client_ip}"
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _ensure_login_limits(db):
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS auth_login_limits (
+            key_hash TEXT PRIMARY KEY,
+            failures INTEGER NOT NULL,
+            window_started INTEGER NOT NULL
+        )
+    """)
+
+
+def _check_login_limit(db, key_hash: str, now: int) -> None:
+    _ensure_login_limits(db)
+    row = db.execute(
+        "SELECT failures, window_started FROM auth_login_limits WHERE key_hash=?",
+        (key_hash,),
+    ).fetchone()
+    if row and now - int(row["window_started"]) < LOGIN_WINDOW_SECONDS:
+        if int(row["failures"]) >= LOGIN_MAX_FAILURES:
+            raise HTTPException(429, "Too many login attempts. Please try again in 15 minutes.")
+    elif row:
+        db.execute("DELETE FROM auth_login_limits WHERE key_hash=?", (key_hash,))
+
+
+def _record_login_failure(db, key_hash: str, now: int) -> None:
+    _ensure_login_limits(db)
+    row = db.execute(
+        "SELECT failures, window_started FROM auth_login_limits WHERE key_hash=?",
+        (key_hash,),
+    ).fetchone()
+    if row is None or now - int(row["window_started"]) >= LOGIN_WINDOW_SECONDS:
+        db.execute(
+            "INSERT OR REPLACE INTO auth_login_limits(key_hash, failures, window_started) VALUES(?,?,?)",
+            (key_hash, 1, now),
+        )
+    else:
+        db.execute(
+            "UPDATE auth_login_limits SET failures=failures+1 WHERE key_hash=?",
+            (key_hash,),
+        )
+    db.commit()
+
 
 def current_user(request: Request):
     db = storage.connect()
@@ -40,6 +96,7 @@ def current_user(request: Request):
         raise HTTPException(401, "Authentication required.")
     return user
 
+
 def _issue(response: Response, token: str):
     secure = os.getenv("FLEXY_COOKIE_SECURE", "true").lower() == "true"
     csrf = secrets.token_urlsafe(32)
@@ -47,6 +104,7 @@ def _issue(response: Response, token: str):
                         secure=secure, samesite="lax", path="/")
     response.set_cookie(CSRF, csrf, max_age=7*86400, httponly=False,
                         secure=secure, samesite="lax", path="/")
+
 
 @router.post("/register", status_code=201)
 def register(payload: Credentials, request: Request, response: Response):
@@ -64,23 +122,33 @@ def register(payload: Credentials, request: Request, response: Response):
     _issue(response, token)
     return {"id": user.id, "email": user.email}
 
+
 @router.post("/login")
 def login(payload: Credentials, request: Request, response: Response):
     _origin_check(request)
     db = storage.connect()
+    key_hash = _login_key(request, payload.email)
+    now = int(time.time())
     try:
-        user = authenticate(db, payload.email, payload.password)
+        _check_login_limit(db, key_hash, now)
+        try:
+            user = authenticate(db, payload.email, payload.password)
+        except InvalidCredentials as exc:
+            _record_login_failure(db, key_hash, now)
+            raise HTTPException(401, "Invalid email or password.") from exc
+        db.execute("DELETE FROM auth_login_limits WHERE key_hash=?", (key_hash,))
+        db.commit()
         token, _ = create_session(db, user.id)
-    except InvalidCredentials as exc:
-        raise HTTPException(401, "Invalid email or password.") from exc
     finally:
         db.close()
     _issue(response, token)
     return {"id": user.id, "email": user.email}
 
+
 @router.get("/me")
 def me(user=Depends(current_user)):
     return {"id": user.id, "email": user.email}
+
 
 @router.post("/logout")
 def logout(request: Request, response: Response):
