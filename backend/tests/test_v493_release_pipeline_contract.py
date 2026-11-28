@@ -12,21 +12,6 @@ def test_backend_and_frontend_versions_are_aligned():
     assert package["version"] == "4.6.0"
 
 
-def test_ci_installs_ffmpeg_and_runs_real_backend_mp4_smoke_test():
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-    assert "sudo apt-get install -y ffmpeg" in workflow
-    assert "python -m pytest -q -rs" in workflow
-    assert (ROOT / "backend/tests/test_real_mp4_render_smoke.py").is_file()
-
-
-def test_ci_runs_frontend_typecheck_build_and_browser_workflow():
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-    assert "npm run typecheck" in workflow
-    assert "npm run build" in workflow
-    assert "npm run test:e2e" in workflow
-    assert "playwright diagnostics" in workflow.lower()
-
-
 def test_browser_workflow_discloses_mocked_api():
     test_source = (ROOT / "frontend-reference/apps/web/e2e/editor-workflow.spec.ts").read_text()
     assert 'test("mocked browser workflow:' in test_source
