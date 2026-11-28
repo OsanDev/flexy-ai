@@ -117,6 +117,16 @@ export const mediaApi = {
     const query = new URLSearchParams({ max_scenes: String(boundedMaxScenes), include_visual_scores: String(includeVisualScores) });
     return json<SceneDetectionResult>(`/api/projects/${encodeURIComponent(projectId)}/media/${encodeURIComponent(mediaId)}/scenes?${query}`, { method: "POST" }, true);
   },
+  trackPoint(projectId: string, mediaId: string, point: { x: number; y: number; start: number; duration: number; sampleFps?: number }) {
+    const query = new URLSearchParams({
+      x: String(point.x), y: String(point.y), start: String(point.start),
+      duration: String(point.duration), sample_fps: String(point.sampleFps ?? 2),
+    });
+    return json<MotionTrackingResult>(
+      `/api/projects/${encodeURIComponent(projectId)}/media/${encodeURIComponent(mediaId)}/track-point?${query}`,
+      { method: "POST" }, true,
+    );
+  },
   sceneVision(projectId: string, mediaId: string, timestamp: number) {
     const query = new URLSearchParams({ timestamp: String(Math.max(0, timestamp)) });
     return json<SceneVisionResult>(`/api/projects/${encodeURIComponent(projectId)}/media/${encodeURIComponent(mediaId)}/scene-vision?${query}`, { method: "POST" }, true);
@@ -142,5 +152,16 @@ export interface TranscriptionResult {
   segments: TranscriptionSegment[];
   analysis?: { segment_count: number; word_count: number; word_timestamps: number; active_duration_seconds: number; speaking_rate_wpm: number | null; long_pauses: Array<{ start: number; end: number; duration: number }>; filler_word_counts: Record<string, number>; notice: string };
   chunking?: { enabled: boolean; chunk_count: number; chunk_duration_seconds: number };
+  notice: string;
+}
+
+export interface MotionTrackingResult {
+  media_id: string;
+  tracking_method: string;
+  semantic_recognition: false;
+  sample_fps: number;
+  frame_count: number;
+  complete: boolean;
+  keyframes: Array<{ time: number; x: number; y: number; confidence: number }>;
   notice: string;
 }
