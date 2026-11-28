@@ -30,6 +30,27 @@ class RenderingValidationTests(unittest.TestCase):
         with self.assertRaises(RenderValidationError):
             validate_render_graph({"clips": [{"media_id": "../../etc/passwd", "duration": 2}]})
 
+    def test_validates_vfx_transform_properties(self):
+        from app.rendering import validate_render_graph
+        media_dir = Path("/tmp/flexy-test-vfx-transform")
+        media_dir.mkdir(exist_ok=True)
+        (media_dir / "clip.mp4").write_bytes(b"video")
+        try:
+            with patch("app.rendering.storage.get_media", return_value={"stored_name": "clip.mp4", "mime_type": "video/mp4"}), patch("app.rendering.storage.MEDIA_DIR", media_dir):
+                result = validate_render_graph({"clips": [{
+                    "media_id": "vfx", "duration": 2, "opacity": 0.65,
+                    "scale": 1.25, "position_x": 120, "position_y": -40,
+                }]})
+                self.assertEqual(result["clips"][0]["opacity"], 0.65)
+                self.assertEqual(result["clips"][0]["scale"], 1.25)
+                self.assertEqual(result["clips"][0]["position_x"], 120)
+                self.assertEqual(result["clips"][0]["position_y"], -40)
+                with self.assertRaises(RenderValidationError):
+                    validate_render_graph({"clips": [{"media_id": "vfx", "duration": 2, "opacity": 1.5}]})
+        finally:
+            (media_dir / "clip.mp4").unlink(missing_ok=True)
+            media_dir.rmdir()
+
     def test_rejects_unsupported_frame_rate(self):
         with self.assertRaises(RenderValidationError):
             validate_render_graph({"frame_rate": 27, "clips": [{"media_id": "x", "duration": 2}]})
