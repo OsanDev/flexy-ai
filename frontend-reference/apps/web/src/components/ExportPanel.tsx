@@ -209,7 +209,7 @@ export function ExportPanel({ projectId, graph, onClose }: ExportPanelProps) {
       </div>
 
       <div className="flexy-export-panel__actions">
-        <button type="button" onClick={startExport} disabled={busy || !preflight}>
+        <button type="button" onClick={startExport} disabled={busy || preflight?.ready !== true}>
           {busy ? "Working…" : "Start export"}
         </button>
         {job && ACTIVE.has(job.status) && (
