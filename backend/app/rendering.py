@@ -41,17 +41,26 @@ def probe_video_encoders() -> dict[str, Any]:
 
 
 def select_video_encoder(requested: str | None = None, capabilities: dict[str, Any] | None = None) -> dict[str, str]:
-    """Resolve configured encoder; auto remains portable and uses libx264."""
+    """Resolve a listed H.264 encoder, preferring portable software encoding."""
     requested = (requested or __import__("os").getenv("FLEXY_VIDEO_ENCODER", "auto")).strip().lower()
     if requested not in VIDEO_ENCODER_CHOICES:
         raise RenderValidationError(
             "FLEXY_VIDEO_ENCODER must be auto, libx264, h264_nvenc, h264_qsv or h264_videotoolbox."
         )
     capabilities = capabilities or probe_video_encoders()
+    if not capabilities.get("ffmpeg_available"):
+        raise RenderValidationError("FFmpeg is not available on this render server.")
     available = capabilities.get("available", [])
     if requested == "auto":
-        chosen = "libx264"
-        mode = "software"
+        if "libx264" in available:
+            chosen = "libx264"
+        else:
+            chosen = next((name for name in HARDWARE_VIDEO_ENCODERS if name in available), None)
+            if chosen is None:
+                raise RenderValidationError(
+                    "No supported H.264 video encoder is available in this FFmpeg build."
+                )
+        mode = "software" if chosen == "libx264" else "hardware"
     elif requested not in available:
         raise RenderValidationError(
             f"Configured video encoder '{requested}' is not listed by this FFmpeg build. "
