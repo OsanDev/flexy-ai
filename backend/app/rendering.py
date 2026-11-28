@@ -48,7 +48,7 @@ def select_video_encoder(requested: str | None = None, capabilities: dict[str, A
             "FLEXY_VIDEO_ENCODER must be auto, libx264, h264_nvenc, h264_qsv or h264_videotoolbox."
         )
     capabilities = capabilities or probe_video_encoders()
-    if not capabilities.get("ffmpeg_available"):
+    if not capabilities.get("ffmpeg_available", True):
         raise RenderValidationError("FFmpeg is not available on this render server.")
     available = capabilities.get("available", [])
     if requested == "auto":
