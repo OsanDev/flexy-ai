@@ -12,7 +12,7 @@ services:
       FLEXY_SPEECH_MODEL: "${FLEXY_SPEECH_MODEL:-whisper-1}"
       FLEXY_SPEECH_DIARIZATION_MODEL: "${FLEXY_SPEECH_DIARIZATION_MODEL:-}"
     volumes:
-      - flexy_data:/app/data
+      - flexy_data:/data
     expose:
       - "8000"
     healthcheck:
