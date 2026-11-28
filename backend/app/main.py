@@ -77,7 +77,10 @@ async def fail_closed_unintegrated_routes(request, call_next):
     # mutation routes from silently omitting protection. Login/register perform
     # their own origin validation and do not have an authenticated session yet.
     if (path.startswith("/api/") and method not in {"GET", "HEAD", "OPTIONS"}
-            and path not in {"/api/auth/login", "/api/auth/register"}
+            and path not in {
+                "/api/auth/login", "/api/auth/register",
+                "/api/auth/password-reset/request", "/api/auth/password-reset/confirm",
+            }
             and request.headers.get("origin")
             and request.cookies.get("flexy_session")):
         try:
