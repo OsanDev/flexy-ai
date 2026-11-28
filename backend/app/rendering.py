@@ -572,7 +572,6 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
             f"[{overlay_label}][{clip_label}]overlay=x='(W-w)/2+{position_x}':y='(H-h)/2+{position_y}':eof_action=pass:shortest=0:"
             f"enable='between(t,{start},{end})'[{next_label}]"
         )
-        )
         overlay_label = next_label
     filters.append(f"[{overlay_label}]trim=duration={duration},setpts=PTS-STARTPTS[outv]")
 
