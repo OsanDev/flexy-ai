@@ -114,13 +114,14 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Start isolated live backend
+        working-directory: backend
         env:
           FLEXY_DATA_DIR: /tmp/flexy-live-e2e-data
           FLEXY_CORS_ORIGINS: http://127.0.0.1:4173
           FLEXY_COOKIE_SECURE: "false"
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements.txt
+          python -m pip install -r requirements.txt
           nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/flexy-live-backend.log 2>&1 &
           for attempt in $(seq 1 60); do
             if curl --fail http://127.0.0.1:8000/api/health; then
