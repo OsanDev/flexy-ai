@@ -22,7 +22,7 @@ class RenderCancellationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "out.mp4"
             with patch("app.rendering.shutil.which", return_value="/usr/bin/ffmpeg"), \
-                 patch("app.rendering.subprocess.Popen", return_value=process), \\
+                 patch("app.rendering.subprocess.Popen", return_value=process), \
                  patch("app.rendering.probe_video_encoders", return_value={"ffmpeg_available": True, "available": ["libx264"], "hardware": []}):
                 with self.assertRaises(RenderCancelledError):
                     render_mp4(graph, output, cancel_check=lambda: True)
