@@ -576,3 +576,8 @@ input:focus,textarea:focus{border-color:var(--flexy-aqua);box-shadow:0 0 0 3px v
 .dialogue-pause-trim-actions { display:grid; gap:8px; padding:10px; border:1px solid var(--border,#394150); border-radius:9px; }
 .dialogue-pause-trim-actions p { margin:0; font-size:12px; opacity:.78; }
 .dialogue-pause-trim-actions button { justify-self:start; min-height:40px; padding:0 14px; }
+
+
+/* Account recovery screens */
+.auth-link{justify-self:start;padding:5px 0;background:transparent;color:#b9aaff;text-decoration:underline;text-underline-offset:3px;font-size:11px}
+.auth-notice{padding:12px;border:1px solid #73e3c255;border-radius:10px;background:#73e3c20d;color:#a7efd8;font-size:12px;line-height:1.6}
