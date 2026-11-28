@@ -53,53 +53,103 @@ def _needs_advanced_model(instruction: str, assets: list[dict[str, Any]]) -> boo
     return len(assets) >= 8 or any(term in text for term in advanced_terms)
 
 
-def _model_plan(instruction: str, assets: list[dict[str, Any]], project: dict[str, Any], transcript: str) -> dict[str, Any] | None:
-    advanced = _needs_advanced_model(instruction, assets)
-    if advanced:
-        key = os.getenv("FLEXY_AI_ADVANCED_API_KEY", "").strip()
-        base = os.getenv("FLEXY_AI_ADVANCED_BASE_URL", "https://api.z.ai/api/paas/v4").rstrip("/")
-        model = os.getenv("FLEXY_AI_ADVANCED_MODEL", "glm-5.3-flash")
-        tier = "advanced"
-    else:
-        key = os.getenv("FLEXY_AI_API_KEY", "").strip()
-        base = os.getenv("FLEXY_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-        model = os.getenv("FLEXY_AI_MODEL", "gpt-4o-mini")
-        tier = "fast"
-    # If the advanced provider is not configured, keep the fast provider available.
-    if not key and advanced:
-        key = os.getenv("FLEXY_AI_API_KEY", "").strip()
-        base = os.getenv("FLEXY_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-        model = os.getenv("FLEXY_AI_MODEL", "gpt-4o-mini")
-        tier = "fast_fallback"
-    if not key: return None
-    payload = {"model":model,"temperature":0.3,"response_format":{"type":"json_object"},"messages":[
-        {"role":"system","content":"You are FLEXY AI Director. Return JSON keys summary, aspect_ratio_id, suggestions, warnings. aspect_ratio_id must be portrait, landscape, or square. suggestions is an array of {kind,title,detail}. Never claim to inspect frames or hear audio. Use only supplied metadata/transcript. Suggestions must be editable and non-destructive."},
-        {"role":"user","content":json.dumps({"instruction":instruction[:4000],"project":project,"assets":assets[:100],"transcript":transcript[:12000],"presets":PRESETS},ensure_ascii=False)}]}
-    # GLM-5.3-Flash supports low reasoning effort, avoiding its default maximum effort.
+def _provider_plan(
+    instruction: str,
+    assets: list[dict[str, Any]],
+    project: dict[str, Any],
+    transcript: str,
+    *,
+    key: str,
+    base: str,
+    model: str,
+    tier: str,
+) -> dict[str, Any]:
+    payload = {"model": model, "temperature": 0.3, "response_format": {"type": "json_object"}, "messages": [
+        {"role": "system", "content": "You are FLEXY AI Director. Return JSON keys summary, aspect_ratio_id, suggestions, warnings. aspect_ratio_id must be portrait, landscape, or square. suggestions is an array of {kind,title,detail}. Never claim to inspect frames or hear audio. Use only supplied metadata/transcript. Suggestions must be editable and non-destructive."},
+        {"role": "user", "content": json.dumps({"instruction": instruction[:4000], "project": project, "assets": assets[:100], "transcript": transcript[:12000], "presets": PRESETS}, ensure_ascii=False)}
+    ]}
     if model.startswith("glm-5.3"):
         payload["reasoning_effort"] = "low"
-    req = urllib.request.Request(base+"/chat/completions",data=json.dumps(payload).encode(),headers={"Authorization":f"Bearer {key}","Content-Type":"application/json"},method="POST")
-    try:
-        with urllib.request.urlopen(req,timeout=35) as response: raw=json.loads(response.read().decode())
-        parsed=json.loads(raw["choices"][0]["message"]["content"])
-        preset=PRESETS.get(parsed.get("aspect_ratio_id"),PRESETS["landscape"])
-        items=parsed.get("suggestions",[])
-        if not isinstance(items,list): raise ValueError("Invalid suggestions list")
-        safe=[]
-        for item in items[:12]:
-            if isinstance(item,dict): safe.append({"kind":str(item.get("kind","review"))[:40],"title":str(item.get("title","Review suggestion"))[:120],"detail":str(item.get("detail","Review before applying."))[:600]})
-        if not safe: raise ValueError("No usable suggestions")
-        warnings=parsed.get("warnings",[])
-        return {"provider":"openai_compatible","model":model,"model_tier":tier,"plan_version":"0.9.0","project_id":project.get("id"),"instruction":instruction,
-                "summary":str(parsed.get("summary","AI-generated edit plan"))[:500],"aspect_ratio":preset,
-                "asset_summary":{k:sum(a.get("type")==k for a in assets) for k in ("video","audio","image")},"suggestions":safe,
-                "warnings":[str(w)[:300] for w in warnings[:8]] if isinstance(warnings,list) else [],
-                "timeline_draft":_build_timeline_draft(instruction, assets, project)}
-    except (urllib.error.URLError,TimeoutError,KeyError,IndexError,TypeError,ValueError,json.JSONDecodeError) as exc:
-        result=_local_plan(instruction,assets,project,transcript)
-        result["warnings"].insert(0,f"AI provider request failed; local fallback used ({type(exc).__name__}).")
-        return result
+    req = urllib.request.Request(
+        base + "/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=35) as response:
+        raw = json.loads(response.read().decode())
+    content = raw["choices"][0]["message"]["content"]
+    parsed = json.loads(content)
+    preset = PRESETS.get(parsed.get("aspect_ratio_id"), PRESETS["landscape"])
+    items = parsed.get("suggestions", [])
+    if not isinstance(items, list):
+        raise ValueError("Invalid suggestions list")
+    safe = []
+    for item in items[:12]:
+        if isinstance(item, dict):
+            safe.append({
+                "kind": str(item.get("kind", "review"))[:40],
+                "title": str(item.get("title", "Review suggestion"))[:120],
+                "detail": str(item.get("detail", "Review before applying."))[:600],
+            })
+    if not safe:
+        raise ValueError("No usable suggestions")
+    warnings = parsed.get("warnings", [])
+    return {
+        "provider": "openai_compatible",
+        "model": model,
+        "model_tier": tier,
+        "plan_version": "0.9.0",
+        "project_id": project.get("id"),
+        "instruction": instruction,
+        "summary": str(parsed.get("summary", "AI-generated edit plan"))[:500],
+        "aspect_ratio": preset,
+        "asset_summary": {k: sum(a.get("type") == k for a in assets) for k in ("video", "audio", "image")},
+        "suggestions": safe,
+        "warnings": [str(w)[:300] for w in warnings[:8]] if isinstance(warnings, list) else [],
+        "timeline_draft": _build_timeline_draft(instruction, assets, project),
+    }
 
+
+def _model_plan(instruction: str, assets: list[dict[str, Any]], project: dict[str, Any], transcript: str) -> dict[str, Any] | None:
+    advanced = _needs_advanced_model(instruction, assets)
+    candidates = []
+    if advanced:
+        advanced_key = os.getenv("FLEXY_AI_ADVANCED_API_KEY", "").strip()
+        if advanced_key:
+            candidates.append((
+                advanced_key,
+                os.getenv("FLEXY_AI_ADVANCED_BASE_URL", "https://api.z.ai/api/paas/v4").rstrip("/"),
+                os.getenv("FLEXY_AI_ADVANCED_MODEL", "glm-5.3-flash"),
+                "advanced",
+            ))
+    fast_key = os.getenv("FLEXY_AI_API_KEY", "").strip()
+    if fast_key:
+        candidates.append((
+            fast_key,
+            os.getenv("FLEXY_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+            os.getenv("FLEXY_AI_MODEL", "gpt-4o-mini"),
+            "fast_fallback" if advanced else "fast",
+        ))
+    if not candidates:
+        return None
+
+    failures = []
+    for key, base, model, tier in candidates:
+        try:
+            result = _provider_plan(
+                instruction, assets, project, transcript,
+                key=key, base=base, model=model, tier=tier,
+            )
+            if failures:
+                result["warnings"].insert(0, "The advanced AI provider was unavailable; the fast provider handled this request.")
+            return result
+        except (urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            failures.append(type(exc).__name__)
+
+    result = _local_plan(instruction, assets, project, transcript)
+    result["warnings"].insert(0, f"AI provider requests failed; local fallback used ({', '.join(failures)}).")
+    return result
 
 def build_edit_plan(instruction: str, assets: list[dict[str, Any]], project: dict[str, Any] | None = None, transcript: str = "") -> dict[str, Any]:
     project_data=project or {}
