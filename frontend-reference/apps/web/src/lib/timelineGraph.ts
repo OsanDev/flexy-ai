@@ -6,6 +6,10 @@ export type VideoTimelineClip = {
   timelineStart: number;
   trackIndex: number;
   transition: "none" | "fade" | "crossfade";
+  opacity?: number;
+  scale?: number;
+  positionX?: number;
+  positionY?: number;
 };
 
 export type AudioTimelineClip = {
@@ -91,6 +95,10 @@ export function buildRenderGraph(document: TimelineDocument): Record<string, unk
         timeline_start: clip.timelineStart,
         track_index: clip.trackIndex,
         transition: clip.transition,
+        opacity: clip.opacity ?? 1,
+        scale: clip.scale ?? 1,
+        position_x: clip.positionX ?? 0,
+        position_y: clip.positionY ?? 0,
       })),
     audio_clips: [...document.audioClips]
       .filter((clip) => !(document.hiddenAudioTracks ?? []).includes(clip.trackIndex))
@@ -160,6 +168,10 @@ export function validateTimelineDocument(document: TimelineDocument): string[] {
     if (!Number.isInteger(clip.trackIndex) || clip.trackIndex < 0 || clip.trackIndex > 7) {
       errors.push(`Video clip ${clip.id} must use a track from 0 to 7.`);
     }
+    if (clip.opacity !== undefined && (!Number.isFinite(clip.opacity) || clip.opacity < 0 || clip.opacity > 1)) errors.push(`Video clip ${clip.id} opacity must be between 0 and 1.`);
+    if (clip.scale !== undefined && (!Number.isFinite(clip.scale) || clip.scale < 0.1 || clip.scale > 3)) errors.push(`Video clip ${clip.id} scale must be between 0.1 and 3.`);
+    if (clip.positionX !== undefined && (!Number.isFinite(clip.positionX) || Math.abs(clip.positionX) > 7680)) errors.push(`Video clip ${clip.id} horizontal position is out of range.`);
+    if (clip.positionY !== undefined && (!Number.isFinite(clip.positionY) || Math.abs(clip.positionY) > 7680)) errors.push(`Video clip ${clip.id} vertical position is out of range.`);
   }
   for (const clip of document.audioClips) {
     if (!clip.mediaId.trim()) errors.push(`Audio clip ${clip.id} needs a media ID.`);
