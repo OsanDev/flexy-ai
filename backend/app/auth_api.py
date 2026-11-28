@@ -1,5 +1,7 @@
 from __future__ import annotations
-import hashlib, hmac, os, secrets, time
+import hashlib, hmac, os, secrets, smtplib, time, logging
+from email.message import EmailMessage
+from argon2 import PasswordHasher
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from . import storage
@@ -11,11 +13,23 @@ COOKIE = "flexy_session"
 CSRF = "flexy_csrf"
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_MAX_FAILURES = 5
+RESET_TOKEN_TTL_SECONDS = 30 * 60
+_password_hasher = PasswordHasher()
+_logger = logging.getLogger(__name__)
 
 
 class Credentials(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=12, max_length=1024)
+
+
+class PasswordResetRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(min_length=32, max_length=256)
+    new_password: str = Field(min_length=12, max_length=1024)
 
 
 def _origins():
@@ -76,6 +90,34 @@ def _reserve_login_attempt(db, key_hash: str, now: int) -> bool:
     return int(row["failures"]) <= LOGIN_MAX_FAILURES
 
 
+def _send_password_reset_email(email: str, token: str) -> None:
+    """Send reset link using explicitly configured SMTP; never log the secret token."""
+    host = os.getenv("FLEXY_SMTP_HOST")
+    sender = os.getenv("FLEXY_SMTP_FROM")
+    if not host or not sender:
+        raise RuntimeError("Password reset email delivery is not configured.")
+    port = int(os.getenv("FLEXY_SMTP_PORT", "587"))
+    username = os.getenv("FLEXY_SMTP_USER", "")
+    password = os.getenv("FLEXY_SMTP_PASSWORD", "")
+    app_url = os.getenv("FLEXY_PUBLIC_APP_URL", "").rstrip("/")
+    if not app_url.startswith("https://"):
+        raise RuntimeError("FLEXY_PUBLIC_APP_URL must be an HTTPS URL.")
+    message = EmailMessage()
+    message["Subject"] = "Reset your FLEXY AI password"
+    message["From"] = sender
+    message["To"] = email
+    message.set_content(
+        "We received a request to reset your FLEXY AI password.\n\n"
+        f"Use this one-time link within 30 minutes: {app_url}/reset-password?token={token}\n\n"
+        "If you did not request this, you can ignore this email."
+    )
+    with smtplib.SMTP(host, port, timeout=10) as server:
+        server.starttls()
+        if username:
+            server.login(username, password)
+        server.send_message(message)
+
+
 def current_user(request: Request):
     db = storage.connect()
     try:
@@ -132,6 +174,82 @@ def login(payload: Credentials, request: Request, response: Response):
         db.close()
     _issue(response, token)
     return {"id": user.id, "email": user.email}
+
+
+@router.post("/password-reset/request")
+def request_password_reset(payload: PasswordResetRequest, request: Request):
+    _origin_check(request)
+    email = payload.email.strip().casefold()
+    db = storage.connect()
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    try:
+        user = db.execute(
+            "SELECT id,email FROM users WHERE email=? AND is_active=1", (email,)
+        ).fetchone()
+        if user:
+            now = int(time.time())
+            db.execute(
+                "UPDATE password_reset_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL",
+                (now, user["id"]),
+            )
+            db.execute(
+                "INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)",
+                (token_hash, user["id"], now + RESET_TOKEN_TTL_SECONDS),
+            )
+            db.commit()
+            recipient = user["email"]
+        else:
+            recipient = None
+    finally:
+        db.close()
+    if recipient:
+        try:
+            _send_password_reset_email(recipient, token)
+        except Exception:
+            _logger.exception("Password reset email could not be delivered")
+    # Same response for known and unknown addresses prevents account enumeration.
+    return {"message": "If an account exists for that email, password reset instructions will be sent."}
+
+
+@router.post("/password-reset/confirm")
+def confirm_password_reset(payload: PasswordResetConfirm, request: Request):
+    _origin_check(request)
+    if len(payload.new_password) > 1024:
+        raise HTTPException(422, "Password is too long.")
+    token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
+    now = int(time.time())
+    db = storage.connect()
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("""
+            SELECT user_id FROM password_reset_tokens
+            WHERE token_hash=? AND used_at IS NULL AND expires_at>?
+        """, (token_hash, now)).fetchone()
+        if row is None:
+            db.rollback()
+            raise HTTPException(400, "This password reset link is invalid or has expired.")
+        db.execute(
+            "UPDATE users SET password_hash=? WHERE id=? AND is_active=1",
+            (_password_hasher.hash(payload.new_password), row["user_id"]),
+        )
+        db.execute(
+            "UPDATE password_reset_tokens SET used_at=? WHERE token_hash=? AND used_at IS NULL",
+            (now, token_hash),
+        )
+        db.execute(
+            "UPDATE password_reset_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL",
+            (now, row["user_id"]),
+        )
+        # A password change invalidates every existing session on every device.
+        db.execute(
+            "UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL",
+            (now, row["user_id"]),
+        )
+        db.commit()
+    finally:
+        db.close()
+    return {"password_reset": True, "message": "Password updated. Please sign in again."}
 
 
 @router.get("/me")
