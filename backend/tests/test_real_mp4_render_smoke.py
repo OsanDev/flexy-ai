@@ -235,12 +235,12 @@ def test_real_ffmpeg_render_applies_cgi_chroma_key_and_vfx_transform(tmp_path: P
     def sample_pixel(x: int, y: int) -> tuple[int, int, int]:
         sampled = subprocess.run(
             ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(output),
-             "-vf", f"select=eq(n\\,0),crop=1:1:{x}:{y}", "-frames:v", "1",
+             "-vf", f"crop=2:2:{x}:{y}", "-frames:v", "1",
              "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"],
             check=True, capture_output=True, timeout=15,
         ).stdout
-        assert len(sampled) == 3
-        return tuple(sampled)
+        assert len(sampled) == 12
+        return tuple(sum(sampled[channel::3]) // 4 for channel in range(3))
 
     # Green is keyed to transparency and reveals the renderer's black base;
     # the red foreground object remains visible.
