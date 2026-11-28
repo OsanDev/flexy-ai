@@ -55,6 +55,14 @@ async function authRequest(path: string, email: string, password: string) {
 export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetNotice, setResetNotice] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [authView, setAuthView] = useState<"login" | "forgot" | "reset">(
+    new URLSearchParams(window.location.search).has("token") ? "reset" : "login"
+  );
+  const resetToken = new URLSearchParams(window.location.search).get("token") ?? "";
   const [signedIn, setSignedIn] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [authUnavailable, setAuthUnavailable] = useState(false);
@@ -140,6 +148,55 @@ export default function App() {
       projectDocumentRef.current = undefined;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not sign out.");
+    }
+  };
+
+  const requestPasswordReset = async (event: FormEvent) => {
+    event.preventDefault();
+    setResetNotice("");
+    setResetError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/password-reset/request`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail ?? `Request failed (${response.status}).`);
+      setResetNotice(payload.message ?? "If an account exists for that email, reset instructions will be sent.");
+    } catch (cause) {
+      setResetError(cause instanceof Error ? cause.message : "Could not request a password reset.");
+    }
+  };
+
+  const confirmPasswordReset = async (event: FormEvent) => {
+    event.preventDefault();
+    setResetNotice("");
+    setResetError("");
+    if (!resetToken) {
+      setResetError("This reset link is missing its token. Request a new link.");
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/password-reset/confirm`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resetToken, new_password: resetPassword }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail ?? `Password reset failed (${response.status}).`);
+      setResetNotice("Password updated. You can now sign in with your new password.");
+      setPassword("");
+      setResetPassword("");
+      setSignedIn(false);
+      setAccount("");
+      setAccountId("");
+      setAuthView("login");
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (cause) {
+      setResetError(cause instanceof Error ? cause.message : "Could not reset your password.");
     }
   };
 
@@ -345,14 +402,41 @@ export default function App() {
         </section>
       ) : !signedIn ? (
         <section className="panel auth-panel">
-          <div className="panel-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h2>Sign in to continue</h2></div><span className="status-dot">● SECURE SESSION</span></div>
-          <form onSubmit={(event) => void signIn(event, "login")}>
-            <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" /></label>
-            <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={12} autoComplete="current-password" /></label>
-            <button className="primary" type="submit">Sign in <span>↗</span></button>
-            <button className="secondary" type="button" onClick={(event) => void signIn(event as unknown as FormEvent, "register")}>Create account</button>
-          </form>
-          {error && <p className="error" role="alert">{error}</p>}
+          {authView === "forgot" ? (
+            <>
+              <div className="panel-heading"><div><p className="eyebrow">ACCOUNT RECOVERY</p><h2>Reset your password</h2></div><span className="status-dot">● SECURE LINK</span></div>
+              <p className="hint">Enter your account email. If it matches an account, we'll send a one-time reset link.</p>
+              <form onSubmit={(event) => void requestPasswordReset(event)}>
+                <label>Email<input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} required autoComplete="email" /></label>
+                <button className="primary" type="submit">Send reset link</button>
+                <button className="secondary" type="button" onClick={() => { setAuthView("login"); setResetError(""); setResetNotice(""); }}>Back to sign in</button>
+              </form>
+            </>
+          ) : authView === "reset" ? (
+            <>
+              <div className="panel-heading"><div><p className="eyebrow">ACCOUNT RECOVERY</p><h2>Choose a new password</h2></div><span className="status-dot">● ONE-TIME LINK</span></div>
+              <p className="hint">Choose at least 12 characters. Reset links expire after 30 minutes.</p>
+              <form onSubmit={(event) => void confirmPasswordReset(event)}>
+                <label>New password<input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} required minLength={12} maxLength={1024} autoComplete="new-password" /></label>
+                <button className="primary" type="submit">Update password</button>
+                <button className="secondary" type="button" onClick={() => { setAuthView("forgot"); setResetError(""); setResetNotice(""); }}>Request another link</button>
+              </form>
+            </>
+          ) : (
+            <>
+              <div className="panel-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h2>Sign in to continue</h2></div><span className="status-dot">● SECURE SESSION</span></div>
+              <form onSubmit={(event) => void signIn(event, "login")}>
+                <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" /></label>
+                <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={12} autoComplete="current-password" /></label>
+                <button className="primary" type="submit">Sign in <span>↗</span></button>
+                <button className="secondary" type="button" onClick={(event) => void signIn(event as unknown as FormEvent, "register")}>Create account</button>
+              </form>
+              <button className="auth-link" type="button" onClick={() => { setResetEmail(email); setAuthView("forgot"); setResetError(""); setResetNotice(""); }}>Forgot password?</button>
+            </>
+          )}
+          {error && authView === "login" && <p className="error" role="alert">{error}</p>}
+          {resetError && <p className="error" role="alert">{resetError}</p>}
+          {resetNotice && <p className="auth-notice" role="status">{resetNotice}</p>}
           <p className="hint">Use the backend API configured in <code>VITE_API_BASE_URL</code>. The API must allow this page's origin.</p>
         </section>
       ) : (
