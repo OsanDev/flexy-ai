@@ -217,11 +217,13 @@ def health():
         with storage.connect() as db:
             db.execute("SELECT 1").fetchone()
         database_available = True
-    except (OSError, RuntimeError):
-        pass
     except Exception:
-        # Keep infrastructure details out of the public health response.
-        pass
+        # Keep infrastructure details out of the public response, but retain the
+        # traceback in private service logs so failed readiness checks are diagnosable.
+        import logging
+        logging.getLogger(__name__).exception(
+            "FLEXY readiness probe failed while checking storage/database"
+        )
 
     ffmpeg_available = shutil.which("ffmpeg") is not None
     # The API's core media workflows require FFmpeg; report not-ready rather
