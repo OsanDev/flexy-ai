@@ -49,7 +49,5 @@ def test_successful_login_clears_failed_attempt_counter(tmp_path, monkeypatch):
     assert accepted.status_code == 200
 
     for _ in range(5):
-        assert client.post("/api/auth/logout", headers={
-            **_headers(), "x-csrf-token": client.cookies["flexy_csrf"]
-        }).status_code == 200
         assert client.post("/api/auth/login", json=wrong, headers=_headers()).status_code == 401
+    assert client.post("/api/auth/login", json=wrong, headers=_headers()).status_code == 429
