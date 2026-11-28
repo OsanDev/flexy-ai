@@ -9,6 +9,7 @@ test("live browser workflow: register, upload media, edit timeline and download 
   const email = `live-e2e-${Date.now()}@example.test`;
   const password = "flexy-live-e2e-password-2026";
   const source = join(tmpdir(), `flexy-live-source-${Date.now()}.mp4`);
+  let uploadedMediaId = "";
 
   execFileSync("ffmpeg", [
     "-hide_banner", "-loglevel", "error", "-y",
@@ -17,6 +18,13 @@ test("live browser workflow: register, upload media, edit timeline and download 
   ], { stdio: "pipe", timeout: 30_000 });
 
   try {
+    page.on("response", async (response) => {
+      if (response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/media")) {
+        const payload = await response.json().catch(() => null) as { id?: string } | null;
+        if (payload?.id) uploadedMediaId = payload.id;
+      }
+    });
+
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Sign in to continue" })).toBeVisible();
     await page.getByLabel("Email").fill(email);
@@ -35,6 +43,13 @@ test("live browser workflow: register, upload media, edit timeline and download 
     await expect(page.locator(".track-clip.video")).toHaveCount(1);
     await expect(page.getByText("All changes saved")).toBeVisible({ timeout: 20_000 });
 
+    await expect.poll(() => uploadedMediaId).not.toBe("");
+    await page.getByRole("button", { name: "Advanced JSON" }).click();
+    await page.getByLabel("Render graph (JSON)").fill(JSON.stringify({
+      clips: [{ media_id: uploadedMediaId, source_start: 0, duration: 1, timeline_start: 0 }],
+      audio_clips: [], captions: [], width: 640, height: 360, frame_rate: 24, video_bitrate: "2M",
+    }));
+    await expect(page.getByRole("button", { name: "Start export" })).toBeEnabled({ timeout: 20_000 });
     await page.getByRole("button", { name: "Start export" }).click();
     await expect(page.getByRole("button", { name: "Download MP4" })).toBeVisible({ timeout: 60_000 });
 
