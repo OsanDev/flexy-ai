@@ -90,6 +90,7 @@ export const renderApi = {
     return request<RenderPreflight>(
       `/api/projects/${encodeURIComponent(projectId)}/render-preflight`,
       { method: "POST", body: JSON.stringify({ graph }) },
+      true,
     );
   },
 
