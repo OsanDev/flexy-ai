@@ -426,3 +426,64 @@ class RenderProcessControlTests(unittest.TestCase):
                 render_mp4(self._graph(), output)
         self.assertTrue(SilentProcess.instance.terminated)
         output.unlink(missing_ok=True)
+
+    def test_accepts_ordered_word_timed_karaoke_caption(self):
+        from app.rendering import validate_render_graph
+        with patch("app.rendering.storage.get_media") as get_media, patch("app.rendering.storage.MEDIA_DIR", Path("/tmp/flexy-test-word-captions")):
+            media_dir = Path("/tmp/flexy-test-word-captions")
+            media_dir.mkdir(exist_ok=True)
+            (media_dir / "clip.mp4").write_bytes(b"video")
+            get_media.return_value = {"stored_name": "clip.mp4", "mime_type": "video/mp4"}
+            result = validate_render_graph({
+                "clips": [{"media_id": "v1", "duration": 3}],
+                "captions": [{
+                    "text": "Hello world",
+                    "start": 1.0,
+                    "duration": 1.5,
+                    "style": {"animation": "karaoke"},
+                    "word_timings": [
+                        {"word": "Hello", "start": 1.0, "end": 1.4},
+                        {"word": "world", "start": 1.6, "end": 2.2},
+                    ],
+                }],
+            })
+            self.assertEqual(result["captions"][0]["word_timings"][1]["word"], "world")
+            self.assertEqual(result["captions"][0]["word_timings"][1]["start"], 1.6)
+            (media_dir / "clip.mp4").unlink()
+            media_dir.rmdir()
+
+    def test_rejects_word_timing_outside_caption_range(self):
+        from app.rendering import validate_render_graph
+        with patch("app.rendering.storage.get_media") as get_media, patch("app.rendering.storage.MEDIA_DIR", Path("/tmp/flexy-test-word-captions-invalid")):
+            media_dir = Path("/tmp/flexy-test-word-captions-invalid")
+            media_dir.mkdir(exist_ok=True)
+            (media_dir / "clip.mp4").write_bytes(b"video")
+            get_media.return_value = {"stored_name": "clip.mp4", "mime_type": "video/mp4"}
+            with self.assertRaisesRegex(RenderValidationError, "inside the caption time range"):
+                validate_render_graph({
+                    "clips": [{"media_id": "v1", "duration": 3}],
+                    "captions": [{
+                        "text": "Hello",
+                        "start": 1.0,
+                        "duration": 0.5,
+                        "word_timings": [{"word": "Hello", "start": 1.4, "end": 1.8}],
+                    }],
+                })
+            (media_dir / "clip.mp4").unlink()
+            media_dir.rmdir()
+
+    def test_karaoke_renderer_uses_real_word_durations(self):
+        from app.rendering import _caption_word_events
+        events = _caption_word_events({
+            "text": "Hello world", "start": 1.0, "duration": 1.5,
+            "word_timings": [
+                {"word": "Hello", "start": 1.0, "end": 1.4},
+                {"word": "world", "start": 1.6, "end": 2.2},
+            ],
+            "style": {"animation": "karaoke"},
+        }, "Caption0", 2, 960, 900)
+        self.assertEqual(len(events), 1)
+        self.assertIn(r"{\kf60}Hello", events[0])
+        self.assertIn(r"{\kf60}world", events[0])
+        self.assertIn("0:00:01.00,0:00:02.20", events[0])
+
