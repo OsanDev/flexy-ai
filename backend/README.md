@@ -47,7 +47,10 @@ curl http://127.0.0.1:8000/api/health
 | `FLEXY_COOKIE_SECURE` | Secure attribute for session/CSRF cookies. Keep `true` behind HTTPS; `false` is for local HTTP development only. |
 | `FLEXY_AI_API_KEY` | Optional server-side key for compatible AI provider calls. |
 | `FLEXY_AI_BASE_URL` | Optional OpenAI-compatible API base URL. |
-| `FLEXY_AI_MODEL` | AI Director model name. |
+| `FLEXY_AI_MODEL` | Fast AI Director model name (defaults to `gpt-4o-mini`). |
+| `FLEXY_AI_ADVANCED_API_KEY` | Optional separate server-side key for complex editing requests. |
+| `FLEXY_AI_ADVANCED_BASE_URL` | OpenAI-compatible advanced model API base URL (defaults to Z.ai). |
+| `FLEXY_AI_ADVANCED_MODEL` | Advanced model name (defaults to `glm-5.3-flash`). Complex requests use this route when its key is configured; otherwise they fall back to the fast model. |
 | `FLEXY_VISION_MODEL` | Optional vision model override. |
 | `FLEXY_SPEECH_MODEL` | Speech transcription model name. |
 | `FLEXY_SPEECH_DIARIZATION_MODEL` | Optional diarization model that returns `diarized_json` with `speaker_id` per segment. |
@@ -72,3 +75,7 @@ FFmpeg and FFprobe must be installed for the real MP4 render smoke test. The Git
 - This development backend has not completed a production security or operational review.
 
 See the repository-root `README.md` for frontend setup, Docker instructions, integration limitations, and release status.
+
+### AI model routing
+
+The AI Director keeps `gpt-4o-mini` as its fast default and can route complex multi-clip, scene-analysis, motion-tracking, compositing, and VFX instructions to **GLM-5.3-Flash** through Z.ai. The advanced route is opt-in and requires `FLEXY_AI_ADVANCED_API_KEY`; when it is not configured, requests use the fast provider instead. GLM requests set low reasoning effort to reduce unnecessary latency. Both provider keys stay on the backend. Model routing is based on request wording and asset count, not automatic visual inspection. Measure latency and edit-plan quality with real credentials before treating either provider as production-verified.
