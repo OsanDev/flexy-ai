@@ -40,11 +40,12 @@ def _csrf_check(request: Request):
 def _login_key(request: Request, email: str) -> str:
     # Store only a digest, never raw email addresses or client IPs, in limiter state.
     client_ip = request.client.host if request.client else "unknown"
-    value = f"{email.strip().casefold()}\0{client_ip}"
+    value = f"{email.strip().casefold()}\\0{client_ip}"
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _ensure_login_limits(db):
+def _reserve_login_attempt(db, key_hash: str, now: int) -> bool:
+    """Atomically reserve an attempt so parallel requests cannot bypass the limit."""
     db.execute("""
         CREATE TABLE IF NOT EXISTS auth_login_limits (
             key_hash TEXT PRIMARY KEY,
@@ -52,38 +53,27 @@ def _ensure_login_limits(db):
             window_started INTEGER NOT NULL
         )
     """)
-
-
-def _check_login_limit(db, key_hash: str, now: int) -> None:
-    _ensure_login_limits(db)
-    row = db.execute(
-        "SELECT failures, window_started FROM auth_login_limits WHERE key_hash=?",
-        (key_hash,),
-    ).fetchone()
-    if row and now - int(row["window_started"]) < LOGIN_WINDOW_SECONDS:
-        if int(row["failures"]) >= LOGIN_MAX_FAILURES:
-            raise HTTPException(429, "Too many login attempts. Please try again in 15 minutes.")
-    elif row:
-        db.execute("DELETE FROM auth_login_limits WHERE key_hash=?", (key_hash,))
-
-
-def _record_login_failure(db, key_hash: str, now: int) -> None:
-    _ensure_login_limits(db)
-    row = db.execute(
-        "SELECT failures, window_started FROM auth_login_limits WHERE key_hash=?",
-        (key_hash,),
-    ).fetchone()
-    if row is None or now - int(row["window_started"]) >= LOGIN_WINDOW_SECONDS:
-        db.execute(
-            "INSERT OR REPLACE INTO auth_login_limits(key_hash, failures, window_started) VALUES(?,?,?)",
-            (key_hash, 1, now),
-        )
-    else:
-        db.execute(
-            "UPDATE auth_login_limits SET failures=failures+1 WHERE key_hash=?",
-            (key_hash,),
-        )
+    db.execute("BEGIN IMMEDIATE")
+    db.execute(
+        "DELETE FROM auth_login_limits WHERE window_started < ?",
+        (now - 2 * LOGIN_WINDOW_SECONDS,),
+    )
+    row = db.execute("""
+        INSERT INTO auth_login_limits(key_hash, failures, window_started)
+        VALUES(?, 1, ?)
+        ON CONFLICT(key_hash) DO UPDATE SET
+            failures = CASE
+                WHEN excluded.window_started - auth_login_limits.window_started >= ?
+                THEN 1 ELSE auth_login_limits.failures + 1
+            END,
+            window_started = CASE
+                WHEN excluded.window_started - auth_login_limits.window_started >= ?
+                THEN excluded.window_started ELSE auth_login_limits.window_started
+            END
+        RETURNING failures
+    """, (key_hash, now, LOGIN_WINDOW_SECONDS, LOGIN_WINDOW_SECONDS)).fetchone()
     db.commit()
+    return int(row["failures"]) <= LOGIN_MAX_FAILURES
 
 
 def current_user(request: Request):
@@ -128,13 +118,12 @@ def login(payload: Credentials, request: Request, response: Response):
     _origin_check(request)
     db = storage.connect()
     key_hash = _login_key(request, payload.email)
-    now = int(time.time())
     try:
-        _check_login_limit(db, key_hash, now)
+        if not _reserve_login_attempt(db, key_hash, int(time.time())):
+            raise HTTPException(429, "Too many login attempts. Please try again in 15 minutes.")
         try:
             user = authenticate(db, payload.email, payload.password)
         except InvalidCredentials as exc:
-            _record_login_failure(db, key_hash, now)
             raise HTTPException(401, "Invalid email or password.") from exc
         db.execute("DELETE FROM auth_login_limits WHERE key_hash=?", (key_hash,))
         db.commit()
