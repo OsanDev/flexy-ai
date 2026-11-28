@@ -1,7 +1,7 @@
 /**
  * FLEXY AI authenticated render API client.
  *
- * This is a drop-in reference module, not wired into an application shell.
+ * This authenticated client is used by the export panel in the web application.
  * Backend authentication uses HttpOnly flexy_session + readable flexy_csrf cookies.
  */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
