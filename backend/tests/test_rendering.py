@@ -387,7 +387,7 @@ class RenderProcessControlTests(unittest.TestCase):
                 self.returncode = -9
 
         output = Path("/tmp/flexy-silent-cancel.mp4")
-        with patch("app.rendering.shutil.which", return_value="/usr/bin/ffmpeg"), \\
+        with patch("app.rendering.shutil.which", return_value="/usr/bin/ffmpeg"), \
              patch("app.rendering.subprocess.Popen", SilentProcess):
             with self.assertRaises(RenderCancelledError):
                 render_mp4(self._graph(), output, cancel_check=lambda: True)
