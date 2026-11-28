@@ -41,6 +41,45 @@ class AIDirectorTests(unittest.TestCase):
         self.assertEqual(draft['clips'][1]['start'], 2.5)
         self.assertEqual(draft['audio_clips'][0]['volume'], 0.35)
 
+    @patch.dict(os.environ, {
+        'FLEXY_AI_API_KEY':'fast-test-key',
+        'FLEXY_AI_BASE_URL':'https://fast.example/v1',
+        'FLEXY_AI_ADVANCED_API_KEY':'advanced-test-key',
+        'FLEXY_AI_ADVANCED_BASE_URL':'https://advanced.example/v1',
+        'FLEXY_AI_ADVANCED_MODEL':'glm-5.3-flash',
+    })
+    @patch('app.ai_director.urllib.request.urlopen', return_value=FakeResponse())
+    def test_complex_edit_uses_advanced_model_route(self, mocked):
+        plan = build_edit_plan(
+            'Create a detailed multi-clip storyboard with scene analysis',
+            [{'id': f'v{i}', 'type': 'video', 'duration': 8} for i in range(3)],
+            {'id': 'p'},
+        )
+        request = mocked.call_args.args[0]
+        payload = json.loads(request.data.decode())
+        self.assertEqual(request.full_url, 'https://advanced.example/v1/chat/completions')
+        self.assertEqual(payload['model'], 'glm-5.3-flash')
+        self.assertEqual(payload['reasoning_effort'], 'low')
+        self.assertEqual(plan['model_tier'], 'advanced')
+
+    @patch.dict(os.environ, {
+        'FLEXY_AI_API_KEY':'fast-test-key',
+        'FLEXY_AI_BASE_URL':'https://fast.example/v1',
+        'FLEXY_AI_ADVANCED_API_KEY':'',
+    })
+    @patch('app.ai_director.urllib.request.urlopen', return_value=FakeResponse())
+    def test_complex_edit_falls_back_to_fast_model_when_advanced_key_missing(self, mocked):
+        plan = build_edit_plan(
+            'Create a detailed multi-clip storyboard with scene analysis',
+            [{'id': 'v1', 'type': 'video', 'duration': 8}],
+            {'id': 'p'},
+        )
+        request = mocked.call_args.args[0]
+        payload = json.loads(request.data.decode())
+        self.assertEqual(request.full_url, 'https://fast.example/v1/chat/completions')
+        self.assertEqual(payload['model'], 'gpt-4o-mini')
+        self.assertEqual(plan['model_tier'], 'fast_fallback')
+
     def test_timeline_draft_warns_when_no_visual_assets(self):
         plan = build_edit_plan('Make a 20 second video', [{'id': 'a1', 'type': 'audio', 'duration': 20}], {})
         self.assertEqual(plan['timeline_draft']['clips'], [])
