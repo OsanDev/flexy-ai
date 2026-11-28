@@ -75,7 +75,7 @@ test("mocked browser workflow: sign in, import, edit, autosave and download rend
   await page.locator('input[type="file"]').setInputFiles({
     name: "sample.mp4", mimeType: "video/mp4", buffer: Buffer.from("test-video-placeholder"),
   });
-  await expect(page.getByText("Imported 1 file.")).toBeVisible();
+  await expect(page.getByText("Imported 1 of 1 files.")).toBeVisible();
   await page.getByLabel("Video / image asset").selectOption(mediaId);
   await page.getByRole("button", { name: "Add video clip +" }).click();
   await expect(page.locator(".track-clip.video")).toHaveCount(1);
