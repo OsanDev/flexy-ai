@@ -70,6 +70,37 @@ class RenderingValidationTests(unittest.TestCase):
             (media_dir / "cgi.webm").unlink(missing_ok=True)
             media_dir.rmdir()
 
+    def test_validates_motion_tracking_position_keyframes(self):
+        media_dir = Path("/tmp/flexy-test-motion-keyframes")
+        media_dir.mkdir(exist_ok=True)
+        (media_dir / "tracked.mp4").write_bytes(b"video")
+        try:
+            with patch("app.rendering.storage.get_media", return_value={"stored_name": "tracked.mp4", "mime_type": "video/mp4"}), patch("app.rendering.storage.MEDIA_DIR", media_dir):
+                result = validate_render_graph({"clips": [{
+                    "media_id": "tracked", "duration": 3,
+                    "position_keyframes": [
+                        {"time": 0, "x": 0.25, "y": 0.5},
+                        {"time": 1.5, "x": 0.75, "y": 0.4},
+                    ],
+                }]})
+                self.assertEqual(len(result["clips"][0]["position_keyframes"]), 2)
+                with self.assertRaises(RenderValidationError):
+                    validate_render_graph({"clips": [{
+                        "media_id": "tracked", "duration": 3,
+                        "position_keyframes": [
+                            {"time": 1, "x": 0.2, "y": 0.5},
+                            {"time": 0.5, "x": 0.8, "y": 0.5},
+                        ],
+                    }]})
+                with self.assertRaises(RenderValidationError):
+                    validate_render_graph({"clips": [{
+                        "media_id": "tracked", "duration": 3,
+                        "position_keyframes": [{"time": 4, "x": 0.5, "y": 0.5}],
+                    }]})
+        finally:
+            (media_dir / "tracked.mp4").unlink(missing_ok=True)
+            media_dir.rmdir()
+
     def test_rejects_unsupported_frame_rate(self):
         with self.assertRaises(RenderValidationError):
             validate_render_graph({"frame_rate": 27, "clips": [{"media_id": "x", "duration": 2}]})
