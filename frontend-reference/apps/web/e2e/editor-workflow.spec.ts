@@ -43,7 +43,7 @@ test("mocked browser workflow: sign in, import, edit, autosave and download rend
       return json({ id: projectId, name: "Browser Test Project", revision: savedDocuments.length + 1, updated_at: new Date().toISOString() });
     }
     if (path === `/api/projects/${projectId}/render-preflight` && method === "POST") {
-      return json({ message: "Preflight passed", resolution: "1920x1080", frame_rate: 30, video_duration: 5, warnings: [] });
+      return json({ ready: true, message: "Preflight passed", resolution: "1920x1080", frame_rate: 30, video_duration: 5, warnings: [] });
     }
     if (path === `/api/projects/${projectId}/renders` && method === "GET") {
       return json({ renders: renderFinished ? [{ id: "render-1", project_id: projectId, status: "completed", progress: 100 }] : [] });
