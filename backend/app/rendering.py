@@ -223,7 +223,8 @@ def validate_render_graph(graph: dict[str, Any]) -> dict[str, Any]:
                                  "position_x": float(position_x), "position_y": float(position_y),
                                  "chroma_key_color": chroma_key_color,
                                  "chroma_key_similarity": float(chroma_key_similarity),
-                                 "chroma_key_blend": float(chroma_key_blend),\n                                 "position_keyframes": normalized_position_keyframes})
+                                 "chroma_key_blend": float(chroma_key_blend),
+                                 "position_keyframes": normalized_position_keyframes})
 
     normalized_audio = []
     for clip in audio_clips:
