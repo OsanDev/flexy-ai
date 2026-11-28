@@ -21,5 +21,5 @@ def test_project_settings_can_rename_current_project():
 
 def test_local_recovery_is_cleared_after_successful_cloud_save():
     source = (ROOT / "frontend-reference/apps/web/src/App.tsx").read_text()
-    assert 'localStorage.removeItem(`flexy:recovery:${projectId.trim()}`)' in source
+    assert 'localStorage.removeItem(recoveryStorageKey(accountId, targetProjectId))' in source
     assert "setSaveStatus(\"All changes saved\")" in source
