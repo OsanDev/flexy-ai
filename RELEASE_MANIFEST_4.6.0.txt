@@ -1,25 +1,36 @@
 FLEXY AI 4.6.0
-Integrated local-run release candidate
+Integrated development release candidate
 
-Verified in the build workspace:
-- Backend pytest: 556 passed
+Verified on branch build/complete-project:
 - Backend Python compilation: passed
-- Timeline-core compile and tests: passed
-- FFmpeg and FFprobe detected
-- Bash launcher syntax: passed
-- Docker Compose YAML parsed successfully
-- Source archive integrity: checked after packaging
+- Backend pytest suite: 572 passed, 1 warning
+- Real FFmpeg MP4 render smoke tests: passed
+- Frontend TypeScript check: passed
+- Timeline-core tests: passed
+- Vite production build: passed
+- Playwright mocked browser workflow: passed
+- Playwright live browser workflow: passed
+  - Account registration and session cookies
+  - Project creation and cloud persistence
+  - Real media upload and media probing
+  - Timeline editing and autosave
+  - CSRF-protected render preflight and render submission
+  - FFmpeg MP4 rendering and browser download
+  - Downloaded file verified as an MP4 container
 
-Not verified in this workspace:
-- React-aware TypeScript check and Vite production build (npm registry timed out; dependencies unavailable)
-- Playwright browser workflow
-- Docker image build / Compose runtime
-- Live AI provider calls (no provider key supplied)
-- Public deployment, HTTPS, production security review, or load testing
+Not certified for public production deployment:
+- Real-device Android/browser compatibility and performance
+- Production HTTPS, domain, secrets, backup and persistent-volume configuration
+- Load, concurrency and large-file stress testing
+- External AI provider calls (no provider key supplied)
+- Hardware encoder and 8K/120 FPS performance on target deployment hardware
 
 Use:
 - macOS/Linux: ./start-local.sh
-- Windows PowerShell: .\start-local.ps1
+- Windows PowerShell: .\\start-local.ps1
 - Docker: docker compose up --build (open http://localhost:8080)
 
-This package is intended for local setup and team evaluation, not public production deployment.
+The verified CI run is available at:
+https://github.com/OsanDev/flexy-ai/actions/runs/46106468417
+
+Keep the working branch separate from main until the release owner approves promotion.
