@@ -187,6 +187,24 @@ def validate_render_graph(graph: dict[str, Any]) -> dict[str, Any]:
         chroma_key_color = clip.get("chroma_key_color")
         chroma_key_similarity = clip.get("chroma_key_similarity", 0.3)
         chroma_key_blend = clip.get("chroma_key_blend", 0.1)
+        position_keyframes = clip.get("position_keyframes", [])
+        if not isinstance(position_keyframes, list) or len(position_keyframes) > 120:
+            raise RenderValidationError("Video position_keyframes must be a list of at most 120 points.")
+        previous_keyframe_time = -1.0
+        normalized_position_keyframes = []
+        for point in position_keyframes:
+            if not isinstance(point, dict):
+                raise RenderValidationError("Each motion tracking keyframe must be an object.")
+            point_time, point_x, point_y = point.get("time"), point.get("x"), point.get("y")
+            if (any(isinstance(value, bool) or not isinstance(value, (int, float))
+                    for value in (point_time, point_x, point_y))
+                    or point_time < 0 or point_time > float(duration)
+                    or point_time <= previous_keyframe_time
+                    or not 0 <= point_x <= 1 or not 0 <= point_y <= 1):
+                raise RenderValidationError("Motion tracking keyframes must have ordered times within the clip and normalized coordinates.")
+            previous_keyframe_time = float(point_time)
+            normalized_position_keyframes.append({"time": float(point_time),
+                                                  "x": float(point_x), "y": float(point_y)})
         if chroma_key_color is not None and (not isinstance(chroma_key_color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", chroma_key_color)):
             raise RenderValidationError("Video chroma_key_color must be a six-digit hex color.")
         for value, label in ((chroma_key_similarity, "chroma_key_similarity"), (chroma_key_blend, "chroma_key_blend")):
@@ -205,7 +223,7 @@ def validate_render_graph(graph: dict[str, Any]) -> dict[str, Any]:
                                  "position_x": float(position_x), "position_y": float(position_y),
                                  "chroma_key_color": chroma_key_color,
                                  "chroma_key_similarity": float(chroma_key_similarity),
-                                 "chroma_key_blend": float(chroma_key_blend)})
+                                 "chroma_key_blend": float(chroma_key_blend),\n                                 "position_keyframes": normalized_position_keyframes})
 
     normalized_audio = []
     for clip in audio_clips:
@@ -573,8 +591,27 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
         next_label = f"composite{visual_index}"
         position_x = clip.get("position_x", 0)
         position_y = clip.get("position_y", 0)
+        keyframes = clip.get("position_keyframes", [])
+        if keyframes:
+            def motion_expression(axis: str, base: float) -> str:
+                dimension = "W" if axis == "x" else "H"
+                values = [(float(point["time"]), float(point[axis])) for point in keyframes]
+                expression = f"({dimension}*{values[-1][1]}-{dimension}/2)"
+                for (left_time, left_value), (right_time, right_value) in reversed(list(zip(values, values[1:]))):
+                    left_offset = dimension + f"*{left_value}-{dimension}/2"
+                    right_offset = dimension + f"*{right_value}-{dimension}/2"
+                    span = max(0.001, right_time - left_time)
+                    interpolated = f"({left_offset}+({right_offset}-{left_offset})*(t-{start + left_time})/{span})"
+                    expression = f"if(lt(t,{start + right_time}),{interpolated},{expression})"
+                first_offset = f"({dimension}*{values[0][1]}-{dimension}/2)"
+                return f"({base}+if(lt(t,{start + values[0][0]}),{first_offset},{expression}))"
+            x_expression = motion_expression("x", position_x)
+            y_expression = motion_expression("y", position_y)
+        else:
+            x_expression = f"(W-w)/2+{position_x}"
+            y_expression = f"(H-h)/2+{position_y}"
         filters.append(
-            f"[{overlay_label}][{clip_label}]overlay=x='(W-w)/2+{position_x}':y='(H-h)/2+{position_y}':eof_action=pass:shortest=0:"
+            f"[{overlay_label}][{clip_label}]overlay=x='{x_expression}':y='{y_expression}':eval=frame:eof_action=pass:shortest=0:"
             f"enable='between(t,{start},{end})'[{next_label}]"
         )
         overlay_label = next_label
