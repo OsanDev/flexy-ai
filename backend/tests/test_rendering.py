@@ -313,7 +313,7 @@ class RenderProgressTests(unittest.TestCase):
         }
         values = []
         with patch('app.rendering.shutil.which', return_value='/usr/bin/ffmpeg'), \
-             patch('app.rendering.subprocess.Popen', FakeProcess), \\
+             patch('app.rendering.subprocess.Popen', FakeProcess), \
              patch('app.rendering.probe_video_encoders', return_value={"ffmpeg_available": True, "available": ["libx264"], "hardware": []}):
             render_mp4(graph, output, progress_callback=values.append)
         self.assertIn(50, values)
@@ -389,7 +389,7 @@ class RenderProcessControlTests(unittest.TestCase):
 
         output = Path("/tmp/flexy-silent-cancel.mp4")
         with patch("app.rendering.shutil.which", return_value="/usr/bin/ffmpeg"), \
-             patch("app.rendering.subprocess.Popen", SilentProcess), \\
+             patch("app.rendering.subprocess.Popen", SilentProcess), \
              patch("app.rendering.probe_video_encoders", return_value={"ffmpeg_available": True, "available": ["libx264"], "hardware": []}):
             with self.assertRaises(RenderCancelledError):
                 render_mp4(self._graph(), output, cancel_check=lambda: True)
