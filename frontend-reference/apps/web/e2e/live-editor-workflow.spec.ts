@@ -10,6 +10,7 @@ test("live browser workflow: register, upload media, edit timeline and download 
   const password = "flexy-live-e2e-password-2026";
   const source = join(tmpdir(), `flexy-live-source-${Date.now()}.mp4`);
   let uploadedMediaId = "";
+  let latestRenderStatus: { status: string; error?: string | null } | null = null;
 
   execFileSync("ffmpeg", [
     "-hide_banner", "-loglevel", "error", "-y",
@@ -19,6 +20,9 @@ test("live browser workflow: register, upload media, edit timeline and download 
 
   try {
     page.on("response", async (response) => {
+      if (response.request().method() === "GET" && /\\/api\\/renders\\/[^/]+$/.test(new URL(response.url()).pathname)) {
+        latestRenderStatus = await response.json().catch(() => null) as { status: string; error?: string | null } | null;
+      }
       if (response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/media")) {
         const payload = await response.json().catch(() => null) as { id?: string } | null;
         if (payload?.id) uploadedMediaId = payload.id;
@@ -51,7 +55,8 @@ test("live browser workflow: register, upload media, edit timeline and download 
     }));
     await expect(page.getByRole("button", { name: "Start export" })).toBeEnabled({ timeout: 20_000 });
     await page.getByRole("button", { name: "Start export" }).click();
-    await expect(page.getByRole("button", { name: "Download MP4" })).toBeVisible({ timeout: 60_000 });
+    await expect.poll(() => latestRenderStatus?.status === "completed" ? "completed" : latestRenderStatus ? JSON.stringify(latestRenderStatus) : "pending", { timeout: 60_000 }).toBe("completed");
+    await expect(page.getByRole("button", { name: "Download MP4" })).toBeVisible({ timeout: 10_000 });
 
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download MP4" }).click();
