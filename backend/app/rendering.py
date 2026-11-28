@@ -173,6 +173,17 @@ def validate_render_graph(graph: dict[str, Any]) -> dict[str, Any]:
         transition = clip.get("transition", "none")
         if transition not in ("none", "fade", "crossfade"):
             raise RenderValidationError("Video transition must be none, fade or crossfade.")
+        opacity = clip.get("opacity", 1.0)
+        scale = clip.get("scale", 1.0)
+        position_x = clip.get("position_x", 0)
+        position_y = clip.get("position_y", 0)
+        if isinstance(opacity, bool) or not isinstance(opacity, (int, float)) or not 0 <= opacity <= 1:
+            raise RenderValidationError("Video opacity must be between 0 and 1.")
+        if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not 0.1 <= scale <= 3:
+            raise RenderValidationError("Video scale must be between 0.1 and 3.")
+        for value, label in ((position_x, "position_x"), (position_y, "position_y")):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or abs(value) > 7680:
+                raise RenderValidationError(f"Video {label} must be between -7680 and 7680.")
         clip_end = float(timeline_start) + float(duration)
         if not has_explicit_timeline_start:
             legacy_cursor = max(legacy_cursor, clip_end)
@@ -181,7 +192,9 @@ def validate_render_graph(graph: dict[str, Any]) -> dict[str, Any]:
             raise RenderValidationError("Video duration exceeds the 30-minute development limit.")
         normalized_video.append({"path": str(path), "source_start": float(start), "duration": float(duration),
                                  "timeline_start": float(timeline_start), "track_index": track_index,
-                                 "transition": transition, "is_image": is_image})
+                                 "transition": transition, "is_image": is_image,
+                                 "opacity": float(opacity), "scale": float(scale),
+                                 "position_x": float(position_x), "position_y": float(position_y)})
 
     normalized_audio = []
     for clip in audio_clips:
@@ -528,12 +541,16 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
             fade_duration = min(0.45, max(0.08, clip_duration / 3))
             fade_out_start = max(0.0, clip_duration - fade_duration)
             video_filter += f",fade=t=in:st=0:d={fade_duration}:alpha=1,fade=t=out:st={fade_out_start}:d={fade_duration}:alpha=1"
+        video_filter += (
+            f",scale=iw*{clip['scale']}:ih*{clip['scale']},"
+            f"colorchannelmixer=aa={clip['opacity']}"
+        )
         video_filter += f",setpts=PTS-STARTPTS+{start}/TB"
         clip_label = f"visual{visual_index}"
         filters.append(f"[{input_index}:v:0]{video_filter}[{clip_label}]")
         next_label = f"composite{visual_index}"
         filters.append(
-            f"[{overlay_label}][{clip_label}]overlay=x=0:y=0:eof_action=pass:shortest=0:"
+            f"[{overlay_label}][{clip_label}]overlay=x='(W-w)/2+{clip[\'position_x\']}':y='(H-h)/2+{clip[\'position_y\']}':eof_action=pass:shortest=0:"
             f"enable='between(t,{start},{end})'[{next_label}]"
         )
         overlay_label = next_label
