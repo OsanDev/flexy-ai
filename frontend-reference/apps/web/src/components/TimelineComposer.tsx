@@ -1376,7 +1376,7 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
       {tab === "captions" && <div className="timeline-form">
         <section className="speech-caption-panel" aria-label="AI subtitle generation">
           <div><p className="eyebrow">AI CAPTIONS + LYRICS</p><h3>Generate synced captions or song lyrics</h3></div>
-          <small>Analyze speech or vocals in a video/audio track and create timestamped text. Song-vocal recognition depends on the configured speech model and may need lyric corrections. Word-level timings are used when the provider returns them; otherwise karaoke highlighting uses an estimated word cadence. Requires backend speech credentials and FFmpeg/FFprobe.</small>
+          <small>Analyze speech or vocals in a video/audio track and create timestamped text. Song-vocal recognition depends on the configured speech model and may need lyric corrections. Word-level timings are used when the provider returns them; otherwise karaoke highlighting uses an estimated word cadence. Requires backend speech credentials and FFmpeg/FFprobe. No synthetic transcript is created when unavailable.</small>
           <label>Source media<select value={transcriptionMediaId} onChange={(e) => setTranscriptionMediaId(e.target.value)}>
             <option value="">Choose video or audio</option>
             {assets.filter((asset) => asset.mime_type.startsWith("video/") || asset.mime_type.startsWith("audio/")).map((asset) =>
