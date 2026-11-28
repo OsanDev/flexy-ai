@@ -38,6 +38,7 @@ try {
     { word: "today.", start: 2.01, end: 2.4 },
   ] }], { maxWords: 2 });
   if (speechCues.length !== 4 || speechCues[0].text !== "Hello there," || speechCues[1].start !== 0.8 || !speechCues.every((cue) => cue.wordTimed)) throw new Error(`Speech caption layout failed: ${JSON.stringify(speechCues)}`);
+  if (speechCues[0].wordTimings?.length !== 2 || speechCues[0].wordTimings[1].word !== "there," || speechCues[0].wordTimings[1].start !== 0.36) throw new Error("Speech caption layout did not preserve provider word timestamps");
   const fallbackCue = buildSpeechCaptionCues([{ id: "s2", start: 4, end: 5, text: "No word timing available" }]);
   if (fallbackCue.length !== 1 || fallbackCue[0].wordTimed || fallbackCue[0].start !== 4) throw new Error("Speech caption fallback must preserve provider segment timing");
   const duckClip = { id: "music-duck", mediaId: "music", sourceStart: 0, duration: 12, timelineStart: 5, trackIndex: 0, volume: 1, fadeIn: 0, fadeOut: 0, role: "music", volumeKeyframes: [] };
@@ -82,7 +83,7 @@ try {
       { id: "v2", mediaId: "asset-v2", sourceStart: 1, duration: 5, timelineStart: 8, trackIndex: 0, transition: "none" },
     ],
     audioClips: [{ id: "a1", mediaId: "asset-a1", sourceStart: 0, duration: 13, timelineStart: 0, trackIndex: 0, volume: 1, fadeIn: 0, fadeOut: 0, role: "music", volumeKeyframes: [{ time: 0, volume: 0.2 }, { time: 5, volume: 0.9 }] }],
-    captions: [], width: 1920, height: 1080, frameRate: 30, exportPreset: "1080p", videoBitrate: "12M", ducking: false,
+    captions: [{ id: "timed-caption", text: "Hello there", start: 1, duration: 1, wordTimings: [{ word: "Hello", start: 1, end: 1.3 }, { word: "there", start: 1.4, end: 1.8 }] }], width: 1920, height: 1080, frameRate: 30, exportPreset: "1080p", videoBitrate: "12M", ducking: false,
     duckingSettings: { thresholdDb: -30, ratio: 5, attackMs: 35, releaseMs: 700 },
     audioMixer: { dialogue: { gain: 1, muted: false }, music: { gain: 0.75, muted: false }, effects: { gain: 1, muted: true }, master: { gain: 0.9, muted: false } },
   };
@@ -94,6 +95,7 @@ try {
   if (validateTimelineDocument(plan.nextDocument).length) throw new Error("Edited timeline failed validation");
   const graph = buildRenderGraph(plan.nextDocument);
   if (graph.clips.length !== 2 || graph.audio_clips.length !== 1) throw new Error("Render graph serialization lost clips");
+  if (graph.captions[0].word_timings?.length !== 2 || graph.captions[0].word_timings[1].start !== 1.4) throw new Error("Render graph did not serialize precise caption word timings");
   if (graph.ducking_settings.threshold_db !== -30 || graph.ducking_settings.ratio !== 5 || graph.ducking_settings.attack_ms !== 35 || graph.ducking_settings.release_ms !== 700) throw new Error("Ducking settings were not serialized");
   if (graph.audio_clips[0].volume_keyframes.length !== 2 || graph.audio_clips[0].volume_keyframes[1].volume !== 0.9) throw new Error("Audio volume keyframes were not serialized");
   if (graph.audio_clips[0].bus !== "music" || graph.audio_mixer.music.gain !== 0.75 || graph.audio_mixer.effects.muted !== true || graph.audio_mixer.master.gain !== 0.9) throw new Error("Audio bus routing or mixer settings were not serialized");
