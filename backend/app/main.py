@@ -29,6 +29,7 @@ from .recommendations import build_recommendations
 from .smart_timeline import build_smart_timeline
 from .audio_quality import AudioAnalysisError, analyze_loudness, analyze_beats
 from .render_preflight import inspect_render, validate_project_render_graph
+from .motion_tracking import MotionTrackingError, track_point
 
 APP_VERSION = "4.6.0"
 
@@ -617,6 +618,32 @@ def analyze_media_scenes(project_id: str, media_id: str, threshold: float = 0.35
         raise HTTPException(422, str(exc)) from exc
     return {"media_id": media_id, "threshold": threshold, "scene_count": len(scenes),
             "visual_scores_included": include_visual_scores, "scenes": scenes}
+
+@app.post("/api/projects/{project_id}/media/{media_id}/track-point")
+def analyze_motion_track(project_id: str, media_id: str,
+                         x: float = Query(..., ge=0, le=1),
+                         y: float = Query(..., ge=0, le=1),
+                         start: float = Query(default=0, ge=0, le=3600),
+                         duration: float = Query(default=8, ge=0.5, le=60),
+                         sample_fps: float = Query(default=2, ge=0.5, le=5),
+                         user=Depends(current_user)):
+    """Track a user-selected normalized point for VFX overlay guidance."""
+    media = storage.get_media_for_owner(user.id, media_id, project_id)
+    if not media:
+        raise HTTPException(404, "Media asset not found in this project.")
+    streams = media.get("metadata", {}).get("streams", [])
+    if not any(stream.get("codec_type") == "video" for stream in streams):
+        raise HTTPException(415, "Motion tracking is available for video assets only.")
+    if start + duration > float(media.get("duration") or 0) + 0.5:
+        raise HTTPException(422, "Tracking range extends beyond the media duration.")
+    source = storage.safe_storage_path(storage.MEDIA_DIR, media["stored_name"])
+    try:
+        return {"media_id": media_id, **track_point(
+            source, x=x, y=y, start=start, duration=duration, sample_fps=sample_fps
+        )}
+    except MotionTrackingError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
 
 @app.get("/api/projects/{project_id}/media/{media_id}/scene-thumbnail")
 def read_scene_thumbnail(project_id: str, media_id: str, timestamp: float = 0.0,
