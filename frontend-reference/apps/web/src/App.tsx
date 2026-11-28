@@ -393,7 +393,7 @@ export default function App() {
                 onDocumentChange={(next) => {
                   const targetProjectId = projectId.trim();
                   if (loadedProjectId === targetProjectId && targetProjectId) {
-                    writeLocalRecoverySnapshot(targetProjectId, next);
+                    writeLocalRecoverySnapshot(accountId, targetProjectId, next);
                   }
                   projectDocumentRef.current = next;
                   setProjectDocument(next);
