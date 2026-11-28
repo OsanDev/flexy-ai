@@ -238,6 +238,14 @@ def health():
         "ffmpeg_available": ffmpeg_available,
     }
     if not ready:
+        logging.getLogger(__name__).error(
+            "FLEXY readiness check not ready: database_available=%s "
+            "storage_available=%s ffmpeg_available=%s ffmpeg_path=%s",
+            database_available,
+            storage_available,
+            ffmpeg_available,
+            shutil.which("ffmpeg"),
+        )
         return Response(
             content=__import__("json").dumps(payload),
             status_code=503,
