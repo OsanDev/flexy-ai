@@ -287,7 +287,29 @@ def validate_render_graph(graph: dict[str, Any]) -> dict[str, Any]:
         }
         if normalized_style["animation"] not in ("none", "word", "karaoke", "pop", "fade", "slide"):
             raise RenderValidationError("Caption animation is invalid.")
-        normalized_captions.append({"text": text.strip(), "start": float(start), "duration": float(duration), "style": normalized_style})
+        raw_word_timings = caption.get("word_timings", [])
+        if not isinstance(raw_word_timings, list) or len(raw_word_timings) > 12:
+            raise RenderValidationError("Caption word timings must contain no more than 12 entries.")
+        normalized_word_timings = []
+        previous_word_end = float(start)
+        for word_timing in raw_word_timings:
+            if not isinstance(word_timing, dict):
+                raise RenderValidationError("Each caption word timing must be an object.")
+            word = word_timing.get("word")
+            word_start, word_end = word_timing.get("start"), word_timing.get("end")
+            if not isinstance(word, str) or not word.strip() or len(word) > 100:
+                raise RenderValidationError("Caption word text must contain 1 to 100 characters.")
+            if (isinstance(word_start, bool) or not isinstance(word_start, (int, float))
+                    or isinstance(word_end, bool) or not isinstance(word_end, (int, float))
+                    or not float(start) <= float(word_start) < float(word_end) <= float(start) + float(duration)
+                    or float(word_start) < previous_word_end - 0.02):
+                raise RenderValidationError("Caption word timings must be ordered and inside the caption time range.")
+            normalized_word_timings.append({"word": word.strip(), "start": float(word_start), "end": float(word_end)})
+            previous_word_end = float(word_end)
+        normalized_captions.append({
+            "text": text.strip(), "start": float(start), "duration": float(duration),
+            "style": normalized_style, "word_timings": normalized_word_timings,
+        })
     ducking_settings = graph.get("ducking_settings", {})
     if not isinstance(ducking_settings, dict):
         raise RenderValidationError("ducking_settings must be an object.")
@@ -381,6 +403,18 @@ def _caption_word_events(item: dict[str, Any], name: str, alignment: int, x: int
             line = " ".join(words[:count])
             events.append(f"Dialogue: 0,{_ass_timestamp(event_start)},{_ass_timestamp(start + duration)},{name},,0,0,0,,{base}{_ass_escape_text(line)}")
         return events
+    timed_words = item.get("word_timings") or []
+    if timed_words and len(timed_words) == len(words):
+        karaoke_parts = []
+        for index, timed_word in enumerate(timed_words):
+            next_start = float(timed_words[index + 1]["start"]) if index + 1 < len(timed_words) else float(timed_word["end"])
+            word_duration = max(0.01, next_start - float(timed_word["start"]))
+            word_text = str(timed_word.get("word", ""))
+            karaoke_parts.append(f"{{\\kf{max(1, round(word_duration * 100))}}}{_ass_escape_text(word_text)} ")
+        karaoke = "".join(karaoke_parts).rstrip()
+        event_start = max(start, float(timed_words[0]["start"]))
+        event_end = min(start + duration, float(timed_words[-1]["end"]))
+        return [f"Dialogue: 0,{_ass_timestamp(event_start)},{_ass_timestamp(event_end)},{name},,0,0,0,,{base}{karaoke}"]
     karaoke = "".join(f"{{\\kf{max(1, round(step * 100))}}}{_ass_escape_text(word)} " for word in words).rstrip()
     return [f"Dialogue: 0,{_ass_timestamp(start)},{_ass_timestamp(start + duration)},{name},,0,0,0,,{base}{karaoke}"]
 
