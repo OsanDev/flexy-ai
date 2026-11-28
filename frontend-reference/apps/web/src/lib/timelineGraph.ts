@@ -52,6 +52,7 @@ export type CaptionTimelineItem = {
   start: number;
   duration: number;
   style?: CaptionStyle;
+  wordTimings?: Array<{ word: string; start: number; end: number }>;
 };
 
 export type AudioBusSettings = { gain: number; muted: boolean };
@@ -113,6 +114,7 @@ export function buildRenderGraph(document: TimelineDocument): Record<string, unk
         text: caption.text,
         start: caption.start,
         duration: caption.duration,
+        word_timings: caption.wordTimings ?? [],
         style: caption.style ?? { preset: "classic", position: "bottom", fontSize: 28, color: "#ffffff", backgroundColor: "#000000b8", bold: true, animation: "none", animationDuration: 0.45 },
       })),
     width: document.width,
