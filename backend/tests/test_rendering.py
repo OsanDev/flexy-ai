@@ -51,6 +51,25 @@ class RenderingValidationTests(unittest.TestCase):
             (media_dir / "clip.mp4").unlink(missing_ok=True)
             media_dir.rmdir()
 
+    def test_validates_chroma_key_settings_for_cgi_compositing(self):
+        media_dir = Path("/tmp/flexy-test-cgi-key")
+        media_dir.mkdir(exist_ok=True)
+        (media_dir / "cgi.webm").write_bytes(b"video")
+        try:
+            with patch("app.rendering.storage.get_media", return_value={"stored_name": "cgi.webm", "mime_type": "video/webm"}), patch("app.rendering.storage.MEDIA_DIR", media_dir):
+                result = validate_render_graph({"clips": [{
+                    "media_id": "cgi", "duration": 2, "chroma_key_color": "#00ff00",
+                    "chroma_key_similarity": 0.4, "chroma_key_blend": 0.15,
+                }]})
+                self.assertEqual(result["clips"][0]["chroma_key_color"], "#00ff00")
+                self.assertEqual(result["clips"][0]["chroma_key_similarity"], 0.4)
+                self.assertEqual(result["clips"][0]["chroma_key_blend"], 0.15)
+                with self.assertRaises(RenderValidationError):
+                    validate_render_graph({"clips": [{"media_id": "cgi", "duration": 2, "chroma_key_color": "green"}]})
+        finally:
+            (media_dir / "cgi.webm").unlink(missing_ok=True)
+            media_dir.rmdir()
+
     def test_rejects_unsupported_frame_rate(self):
         with self.assertRaises(RenderValidationError):
             validate_render_graph({"frame_rate": 27, "clips": [{"media_id": "x", "duration": 2}]})
