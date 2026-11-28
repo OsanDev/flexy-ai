@@ -80,6 +80,26 @@ class AIDirectorTests(unittest.TestCase):
         self.assertEqual(payload['model'], 'gpt-4o-mini')
         self.assertEqual(plan['model_tier'], 'fast_fallback')
 
+    @patch.dict(os.environ, {
+        'FLEXY_AI_API_KEY':'fast-test-key',
+        'FLEXY_AI_BASE_URL':'https://fast.example/v1',
+        'FLEXY_AI_ADVANCED_API_KEY':'advanced-test-key',
+        'FLEXY_AI_ADVANCED_BASE_URL':'https://advanced.example/v1',
+        'FLEXY_AI_ADVANCED_MODEL':'glm-5.3-flash',
+    })
+    @patch('app.ai_director.urllib.request.urlopen', side_effect=[__import__('urllib.error').error.URLError('provider unavailable'), FakeResponse()])
+    def test_advanced_provider_failure_retries_fast_provider(self, mocked):
+        plan = build_edit_plan(
+            'Create a detailed multi-clip storyboard with scene analysis',
+            [{'id': 'v1', 'type': 'video', 'duration': 8}],
+            {'id': 'p'},
+        )
+        first_request, second_request = [call.args[0] for call in mocked.call_args_list]
+        self.assertEqual(first_request.full_url, 'https://advanced.example/v1/chat/completions')
+        self.assertEqual(second_request.full_url, 'https://fast.example/v1/chat/completions')
+        self.assertEqual(plan['model_tier'], 'fast_fallback')
+        self.assertIn('advanced AI provider was unavailable', plan['warnings'][0])
+
     def test_timeline_draft_warns_when_no_visual_assets(self):
         plan = build_edit_plan('Make a 20 second video', [{'id': 'a1', 'type': 'audio', 'duration': 20}], {})
         self.assertEqual(plan['timeline_draft']['clips'], [])
