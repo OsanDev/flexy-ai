@@ -1,3 +1,4 @@
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +11,7 @@ from app import storage
 class RenderCancellationTests(unittest.TestCase):
     def test_renderer_stops_ffmpeg_when_cancel_requested(self):
         process = MagicMock()
-        process.stdout = iter(["out_time_ms=1000000\n"])
+        process.stdout = io.StringIO("out_time_ms=1000000\n")
         process.poll.side_effect = [None, 0]
         process.wait.return_value = 0
         graph = {
