@@ -506,11 +506,26 @@ export function TimelineComposer({ assets, projectId, projectContext = {}, onGra
     const imported = captionCues.map((cue, index) => {
       const start = Math.max(cue.start, sourceStart);
       const end = Math.min(cue.end, sourceEnd);
+      const wordTimings = (cue.wordTimings ?? []).flatMap((word) => {
+        const wordStart = Math.max(word.start, sourceStart);
+        const wordEnd = Math.min(word.end, sourceEnd);
+        return wordEnd > wordStart ? [{
+          word: word.word,
+          start: Math.max(0, wordStart + timelineOffset),
+          end: Math.max(0, wordEnd + timelineOffset),
+        }] : [];
+      });
       return {
         id: `speech-${importId}-${index}`,
         text: cue.text,
         start: Math.max(0, start + timelineOffset),
         duration: Math.max(0, end - start),
+        ...(wordTimings.length ? {
+          wordTimings,
+          style: { preset: "neon" as const, position: "bottom" as const, fontSize: 34,
+            color: "#f8fbff", backgroundColor: "#071321c9", bold: true,
+            animation: "karaoke" as const, animationDuration: 0.45 },
+        } : {}),
       };
     }).filter((item) => item.duration > 0.1 && !existing.has(item.id));
     if (!imported.length) return;
