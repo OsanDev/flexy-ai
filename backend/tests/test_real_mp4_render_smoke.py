@@ -184,3 +184,70 @@ def test_real_ffmpeg_render_applies_audio_bus_and_master_mutes(tmp_path: Path):
     import re
     match = re.search(r"mean_volume:\s*(-?\d+(?:\.\d+)?) dB", measured.stderr)
     assert match and float(match.group(1)) <= -90
+
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg tools are not installed")
+def test_real_ffmpeg_render_applies_cgi_chroma_key_and_vfx_transform(tmp_path: Path):
+    """Render a green-screen layer with VFX transforms and verify keyed pixels."""
+    if "libx264" not in probe_video_encoders().get("available", []):
+        pytest.skip("This FFmpeg build does not include the libx264 encoder")
+
+    source = tmp_path / "greenscreen.mp4"
+    output = tmp_path / "cgi-composite.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i",
+            "color=c=0x00ff00:s=64x64:r=24:d=1",
+            "-vf", "drawbox=x=24:y=24:w=16:h=16:color=red:t=fill",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+        ],
+        check=True, capture_output=True, text=True, timeout=30,
+    )
+
+    render_mp4(
+        {
+            "clips": [{
+                "path": str(source), "source_start": 0.0, "duration": 1.0,
+                "timeline_start": 0.0, "track_index": 0, "transition": "none",
+                "is_image": False, "opacity": 1.0, "scale": 1.0,
+                "position_x": 0, "position_y": 0,
+                "chroma_key_color": "#00ff00",
+                "chroma_key_similarity": 0.25, "chroma_key_blend": 0.05,
+            }],
+            "audio_clips": [], "captions": [], "video_duration": 1.0,
+            "width": 64, "height": 64, "frame_rate": 24,
+            "video_bitrate": "2M",
+        },
+        output,
+    )
+
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,width,height",
+         "-of", "json", str(output)],
+        check=True, capture_output=True, text=True, timeout=15,
+    )
+    video = json.loads(probe.stdout)["streams"][0]
+    assert video["codec_name"] == "h264"
+    assert (video["width"], video["height"]) == (64, 64)
+
+    def sample_pixel(x: int, y: int) -> tuple[int, int, int]:
+        sampled = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(output),
+             "-vf", f"select=eq(n\\,0),crop=1:1:{x}:{y}", "-frames:v", "1",
+             "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"],
+            check=True, capture_output=True, timeout=15,
+        ).stdout
+        assert len(sampled) == 3
+        return tuple(sampled)
+
+    # Green is keyed to transparency and reveals the renderer's black base;
+    # the red foreground object remains visible.
+    corner = sample_pixel(4, 4)
+    center = sample_pixel(32, 32)
+    assert max(corner) < 40, f"Expected keyed transparent area to reveal black base, got {corner}"
+    assert center[0] > center[1] * 1.5 and center[0] > center[2] * 1.5, (
+        f"Expected the red CGI foreground object to remain visible, got {center}"
+    )
+    assert output.stat().st_size > 1_000
