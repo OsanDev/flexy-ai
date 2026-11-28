@@ -88,6 +88,9 @@ export function ExportPanel({ projectId, graph, onClose }: ExportPanelProps) {
     try {
       const report = await renderApi.preflight(projectId, exportGraph);
       setPreflight(report);
+      if (report.ready !== true) {
+        throw new Error(String(report.message ?? "Export is not ready. Resolve the preflight issues before rendering."));
+      }
       const result = await renderApi.create(projectId, exportGraph);
       setJob({
         id: result.id,
