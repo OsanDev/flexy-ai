@@ -567,7 +567,9 @@ def render_mp4(graph: dict[str, Any], output_path: Path, progress_callback=None,
         filters.append(f"[{input_index}:v:0]{video_filter}[{clip_label}]")
         next_label = f"composite{visual_index}"
         filters.append(
-            f"[{overlay_label}][{clip_label}]overlay=x='(W-w)/2+{clip[\'position_x\']}':y='(H-h)/2+{clip[\'position_y\']}':eof_action=pass:shortest=0:"
+        position_x = clip["position_x"]
+        position_y = clip["position_y"]
+            f"[{overlay_label}][{clip_label}]overlay=x='(W-w)/2+{position_x}':y='(H-h)/2+{position_y}':eof_action=pass:shortest=0:"
             f"enable='between(t,{start},{end})'[{next_label}]"
         )
         overlay_label = next_label
