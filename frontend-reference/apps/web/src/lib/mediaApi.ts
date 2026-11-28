@@ -115,11 +115,11 @@ export const mediaApi = {
   detectScenes(projectId: string, mediaId: string, maxScenes = 50, includeVisualScores = true) {
     const boundedMaxScenes = Math.min(50, Math.max(1, Math.floor(maxScenes)));
     const query = new URLSearchParams({ max_scenes: String(boundedMaxScenes), include_visual_scores: String(includeVisualScores) });
-    return json<SceneDetectionResult>(`/api/projects/${encodeURIComponent(projectId)}/media/${encodeURIComponent(mediaId)}/scenes?${query}`, { method: "POST" });
+    return json<SceneDetectionResult>(`/api/projects/${encodeURIComponent(projectId)}/media/${encodeURIComponent(mediaId)}/scenes?${query}`, { method: "POST" }, true);
   },
   sceneVision(projectId: string, mediaId: string, timestamp: number) {
     const query = new URLSearchParams({ timestamp: String(Math.max(0, timestamp)) });
-    return json<SceneVisionResult>(`/api/projects/${encodeURIComponent(projectId)}/media/${encodeURIComponent(mediaId)}/scene-vision?${query}`, { method: "POST" });
+    return json<SceneVisionResult>(`/api/projects/${encodeURIComponent(projectId)}/media/${encodeURIComponent(mediaId)}/scene-vision?${query}`, { method: "POST" }, true);
   },
 };
 
